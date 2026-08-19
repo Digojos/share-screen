@@ -1,0 +1,183 @@
+# Share Screen
+
+Compartilhamento de tela pelo navegador: o host transmite tela + audio e os
+espectadores entram por um codigo de sala. Sem instalacao, sem plugin.
+
+- **Front**: React + Vite + TypeScript (`web/`)
+- **Sinalizacao**: Node + Express + Socket.IO (`server/`)
+- **Midia**: WebRTC P2P (malha completa), STUN + TURN
+- **Voz**: chat de audio entre todos os participantes
+- **Persistencia**: MySQL (opcional) para salas e historico de chat
+
+O quadro de video tem botao de **tela cheia** (ou duplo clique no video).
+
+## Como funciona
+
+O servidor **nao processa midia**. Ele so distribui SDP/ICE, mantem a lista de
+salas em memoria e emite credenciais TURN temporarias. O video vai direto de um
+navegador para o outro.
+
+A topologia e uma **malha completa**: cada participante mantem uma
+`RTCPeerConnection` com cada outro. Somente o host envia video (a tela), mas
+qualquer um envia audio, entao qualquer par pode negociar. Por isso o papel
+"polite" do perfect negotiation vem da comparacao de ids, e nao de host/
+espectador — assim os dois lados chegam a papeis opostos sem combinar nada.
+
+Isso limita a sala a poucos participantes (`MAX_PARTICIPANTS`, padrao 6) — o
+gargalo e o upload do host, que envia uma copia do video para cada espectador.
+Para audiencias maiores o caminho e trocar o `PeerManager` por um cliente SFU
+(mediasoup/LiveKit); a sinalizacao de sala e a UI continuam iguais.
+
+## Perfis de video
+
+Tela de trabalho e jogo pedem coisas opostas, entao o host escolhe:
+
+| Perfil | contentHint | FPS | Teto por espectador | Sob pressao de banda |
+| --- | --- | --- | --- | --- |
+| Apresentacao | `text` | 30 | 2,5 Mbps | mantem resolucao |
+| Jogo | `motion` | 60 | 6 Mbps | mantem fluidez |
+
+Separado disso ha um teto de **resolucao** (Nativa / Full HD / HD). E teto, nao
+alvo: compartilhar uma janela de 800x600 em Full HD nao inventa pixels. O limite
+e aplicado na captura, e nao no encoder, porque assim poupa CPU — que costuma
+saturar antes da banda.
+
+A troca vale na hora, sem reescolher a fonte: `contentHint`, framerate e
+resolucao sao reconfigurados na track ao vivo e o bitrate entra via
+`setParameters`.
+
+### Por que a qualidade cai
+
+Enquanto transmite, o host ve uma linha com o que esta realmente saindo e, se
+houver, o motivo da reducao — vindo do `qualityLimitationReason` do WebRTC:
+
+- **cpu** — o encoder nao da conta. Baixar para HD ou usar o perfil Apresentacao
+  resolve.
+- **bandwidth** — o upload nao comporta. Menos espectadores ou HD.
+- **none** — nao ha limitacao; o que se ve e o maximo pedido.
+
+Vale lembrar que uma queda logo no inicio e normal: o WebRTC comeca conservador
+e sobe a qualidade ao longo dos primeiros segundos. E o perfil escolhido decide
+o que e sacrificado primeiro — Apresentacao derruba o framerate, Jogo derruba a
+resolucao.
+
+O teto e **por espectador**. Numa malha o host envia uma copia para cada um,
+entao 4 espectadores em modo Jogo podem custar ate 24 Mbps de upload. Sem teto,
+o WebRTC subiria ate saturar o link e a qualidade cairia para todos ao mesmo
+tempo.
+
+## Voz
+
+Todos os participantes podem falar, inclusive quem so assiste. O microfone e
+capturado **sob demanda**, no primeiro clique em "Entrar no audio" — nunca ao
+entrar na sala. Depois disso, ligar e desligar apenas alterna `track.enabled`,
+sem renegociar.
+
+Duas conexoes nunca chegam a existir se nenhum dos dois lados tem midia: dois
+espectadores calados nao abrem RTCPeerConnection ate um deles ligar o microfone.
+
+Cada participante controla o que **ouve**: um botao silencia tudo que chega, e a
+lista de participantes tem mudo e volume (0 a 100%) individuais. O volume usa a
+propriedade `volume` do elemento de midia; passar de 100% exigiria rotear o
+audio por Web Audio com um `GainNode`, o que nao esta implementado. Nao existe silenciar o microfone dos
+outros — numa malha P2P a midia vai direto de um navegador ao outro, entao o
+servidor nao teria como impor nada; so um SFU permitiria isso de verdade.
+
+O **chat passa pelo servidor** (Socket.IO), nao por DataChannel: numa mesh o
+host teria de repassar mensagens entre espectadores, e o chat pararia de
+funcionar enquanto o P2P nao subisse.
+
+## Persistencia (opcional)
+
+Sem `DATABASE_URL` o servidor roda inteiramente em memoria: a sala morre quando
+o host sai e o chat e efemero. Com o MySQL configurado:
+
+- O **codigo da sala continua valido** depois que o host sai. Quem entrar com
+  ele reativa a sala e assume como host.
+- Quem entra recebe as ultimas mensagens (`CHAT_HISTORY_LIMIT`, padrao 100) no
+  proprio ack do join, antes do primeiro render do chat.
+- Nada e apagado automaticamente — nao ha rotina de retencao.
+
+O que **nao** e persistido: participantes, estado de transmissao e qualquer
+midia. Sao dados de sessao ao vivo e nao fazem sentido fora dela.
+
+```bash
+docker compose up -d mysql
+```
+
+O schema (`rooms`, `messages`) e aplicado no boot do servidor via
+`CREATE TABLE IF NOT EXISTS` — nao ha ferramenta de migration. Se `DATABASE_URL`
+estiver definida e o banco nao responder, o servidor **encerra** em vez de
+degradar em silencio para memoria.
+
+Escritas de chat sao feitas depois do `emit`: a latencia da conversa nao depende
+do banco, e uma falha de gravacao e registrada no log sem derrubar a sala.
+
+## Rodando localmente
+
+```bash
+npm install
+cp server/.env.example server/.env
+cp web/.env.example web/.env
+npm run dev
+```
+
+Abra http://localhost:5173, clique em **Criar sala** e abra o link gerado numa
+segunda aba para entrar como espectador.
+
+Para testar com TURN de verdade (necessario entre redes diferentes):
+
+```bash
+TURN_SECRET=troque-este-segredo docker compose up -d coturn
+```
+
+O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
+
+## Variaveis de ambiente
+
+| Variavel | Onde | Para que |
+| --- | --- | --- |
+| `PORT` | server | Porta do servidor de sinalizacao (3001) |
+| `CORS_ORIGIN` | server | Origens do front, separadas por virgula |
+| `STUN_URLS` | server | Servidores STUN, separados por virgula |
+| `TURN_URLS` | server | Servidores TURN; sem isso so funciona em LAN |
+| `TURN_SECRET` | server | Deve casar com o `static-auth-secret` do coturn |
+| `TURN_TTL_SECONDS` | server | Validade da credencial TURN (padrao 6h) |
+| `MAX_PARTICIPANTS` | server | Host + espectadores por sala (padrao 6) |
+| `DATABASE_URL` | server | MySQL para salas + historico; ausente = memoria |
+| `CHAT_HISTORY_LIMIT` | server | Mensagens antigas enviadas no join (padrao 100) |
+| `VITE_SIGNALING_URL` | web | URL do servidor de sinalizacao |
+
+## Limitacoes conhecidas
+
+- **Audio do sistema depende do navegador.** Chrome/Edge entregam audio de aba
+  (e de tela no Windows) apenas se o usuario marcar "compartilhar audio" no
+  seletor. Firefox e Safari nao entregam audio de tela — nesses casos so o
+  microfone chega aos espectadores.
+- **O microfone so e capturado quando voce pede.** O botao "Entrar no audio"
+  aciona a permissao; antes disso nenhuma track de microfone existe.
+- **Sessoes ao vivo sao em memoria.** Reiniciar o servidor derruba as salas
+  ativas (o historico sobrevive, se houver banco). Para mais de uma instancia,
+  use o adapter Redis do Socket.IO.
+- **Mensagens do historico nao tem dono.** A identidade e um apelido no
+  `localStorage`, entao mensagens antigas nao aparecem destacadas como suas ao
+  reentrar numa sala.
+- **Se o host sai, a sala encerra** — nao ha transferencia de host.
+- **O nome fica no localStorage** por origem: duas abas do mesmo navegador
+  compartilham a mesma identidade.
+- **HTTPS obrigatorio em producao.** `getDisplayMedia` so funciona em contexto
+  seguro; `localhost` e a unica excecao.
+
+## Deploy
+
+1. `npm run build` gera `server/dist` e `web/dist`.
+2. Sirva `web/dist` como estatico (qualquer CDN) apontando `VITE_SIGNALING_URL`
+   para o dominio do servidor.
+3. Rode `node server/dist/index.js` atras de HTTPS/WSS e ajuste `CORS_ORIGIN`.
+4. Suba um coturn com IP publico (portas 3478 UDP/TCP + faixa de relay) ou
+   contrate um TURN gerenciado, e preencha `TURN_URLS`/`TURN_SECRET`.
+
+## Verificacao
+
+`chrome://webrtc-internals` mostra o par de candidatos selecionado. Se aparecer
+`relay`, o trafego esta passando pelo TURN — esperado entre redes diferentes.

@@ -1,0 +1,44 @@
+services:
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    # network_mode: host e o caminho mais confiavel para TURN em Linux — o relay
+    # usa uma faixa ampla de portas UDP que ficaria lenta de mapear uma a uma.
+    # No Docker Desktop (Windows/macOS) use a secao `ports` abaixo.
+    ports:
+      - '3478:3478/udp'
+      - '3478:3478/tcp'
+      - '49160-49200:49160-49200/udp'
+    command: >
+      -n --log-file=stdout
+      --lt-cred-mech
+      --use-auth-secret
+      --static-auth-secret=${TURN_SECRET:-troque-este-segredo}
+      --realm=share-screen.local
+      --min-port=49160
+      --max-port=49200
+      --no-tls
+      --no-dtls
+      --no-cli
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-share_screen}
+      MYSQL_USER: ${MYSQL_USER:-share}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-share}
+    ports:
+      # Use MYSQL_PORT para nao colidir com um MySQL ja instalado na maquina.
+      - '${MYSQL_PORT:-3306}:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # O servidor tenta reconectar no boot, mas o healthcheck evita que
+      # `docker compose up` sinalize "pronto" antes do MySQL aceitar conexao.
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-p${MYSQL_ROOT_PASSWORD:-root}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
