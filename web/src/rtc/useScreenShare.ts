@@ -8,6 +8,12 @@ export interface ScreenShareState {
   error: string | null;
   /** O navegador entregou audio da tela/aba? Nem sempre entrega — ver README. */
   hasSystemAudio: boolean;
+  /**
+   * O que o usuario escolheu no seletor: 'monitor', 'window' ou 'browser'.
+   * Sem isso nao da para orientar sobre o audio — a caixinha fica em lugares
+   * diferentes, e para janela ela simplesmente nao existe.
+   */
+  displaySurface: string | null;
 }
 
 export interface ScreenShareControls extends ScreenShareState {
@@ -75,6 +81,7 @@ export function useScreenShare(
     sharing: false,
     error: null,
     hasSystemAudio: false,
+    displaySurface: null,
   });
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -98,6 +105,7 @@ export function useScreenShare(
       sharing: false,
       error: null,
       hasSystemAudio: false,
+      displaySurface: null,
     });
   }, []);
 
@@ -129,6 +137,7 @@ export function useScreenShare(
         sharing: true,
         error: null,
         hasSystemAudio: displayTracks.some((track) => track.kind === 'audio'),
+        displaySurface: videoTrack?.getSettings().displaySurface ?? null,
       }));
     },
     [stop],
@@ -140,7 +149,10 @@ export function useScreenShare(
       display = await navigator.mediaDevices.getDisplayMedia({
         video: buildVideoConstraints(profileRef.current, resolutionRef.current),
         audio: true,
-      });
+        // Padrao do navegador, explicito para documentar a intencao: queremos o
+        // audio do sistema sempre que ele for oferecido.
+        systemAudio: 'include',
+      } as DisplayMediaStreamOptions);
     } catch (error) {
       setState((prev) => ({ ...prev, error: describeError(error) }));
       return;
@@ -162,7 +174,10 @@ export function useScreenShare(
       display = await navigator.mediaDevices.getDisplayMedia({
         video: buildVideoConstraints(profileRef.current, resolutionRef.current),
         audio: true,
-      });
+        // Padrao do navegador, explicito para documentar a intencao: queremos o
+        // audio do sistema sempre que ele for oferecido.
+        systemAudio: 'include',
+      } as DisplayMediaStreamOptions);
     } catch {
       return;
     }

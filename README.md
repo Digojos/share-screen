@@ -185,10 +185,14 @@ O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
 
 ## Limitacoes conhecidas
 
-- **Audio do sistema depende do navegador.** Chrome/Edge entregam audio de aba
-  (e de tela no Windows) apenas se o usuario marcar "compartilhar audio" no
-  seletor. Firefox e Safari nao entregam audio de tela — nesses casos so o
-  microfone chega aos espectadores.
+- **Audio do sistema depende do navegador e do que foi escolhido.** No Windows,
+  Chrome/Edge oferecem audio para "Tela inteira" e para aba do navegador, mas a
+  caixinha fica no **canto inferior esquerdo do seletor** e passa despercebida.
+  Para "Janela" o audio nao existe em nenhum navegador — nao ha API para isolar
+  o som de uma janela. Firefox e Safari nao entregam audio de tela.
+
+  O app le `displaySurface` da track e orienta conforme o caso, em vez de dar
+  uma dica generica que manda procurar onde nao tem.
 - **O microfone so e capturado quando voce pede.** O botao "Entrar no audio"
   aciona a permissao; antes disso nenhuma track de microfone existe.
 - **Sessoes ao vivo sao em memoria.** Reiniciar o servidor derruba as salas
