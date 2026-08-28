@@ -9,6 +9,22 @@ os pontos por tracos.
 
 ---
 
+## Ja existe um proxy no servidor?
+
+Se as portas 80 e 443 ja estao ocupadas — por exemplo por um nginx em container
+de outro projeto — **nao instale nginx no host**. Siga
+`deploy/nginx.nades.conf.example` e o override `docker-compose.proxy.yml`, que
+coloca a aplicacao na rede do proxy existente. Os passos 0, 4 e 5 abaixo nao se
+aplicam nesse caso.
+
+Descubra o que ocupa as portas com:
+
+```bash
+sudo ss -tlnp | grep -E ':80 |:443 ' ; docker ps --format '{{.Names}} | {{.Ports}}'
+```
+
+---
+
 ## 0. Pre-requisitos
 
 ```bash

@@ -1,0 +1,70 @@
+# Bloco para acrescentar ao `client/nginx.prod.conf` do projeto `nades`.
+#
+# Aquele nginx roda em container e ja ocupa as portas 80 e 443 do servidor, com
+# tres dominios servidos. Este bloco entra ao lado dos que ja existem, seguindo
+# o mesmo padrao: um server HTTP para o desafio do certbot e o redirecionamento,
+# e um server HTTPS com o certificado.
+#
+# Troque `share.hubnades.com.br` pelo subdominio escolhido e aponte o DNS dele
+# para o IP do servidor antes de emitir o certificado.
+#
+# ---------------------------------------------------------------------------
+# POR QUE OS PROXY_PASS USAM NOMES, E NAO 127.0.0.1
+#
+# Dentro do container, `127.0.0.1` e o proprio container — apontar para la daria
+# 502 em tudo. Os nomes abaixo sao os aliases definidos em
+# `docker-compose.proxy.yml`, que coloca a aplicacao na mesma rede Docker.
+#
+# Os aliases sao `share-screen-web` e `share-screen-server` de proposito: o
+# projeto `nades` ja tem um servico chamado `server`, e um nome generico
+# colidiria na rede compartilhada.
+# ---------------------------------------------------------------------------
+
+# ─── HTTP: desafio do certbot e redirecionamento ────────────────────────────
+server {
+    listen 80;
+    server_name share.hubnades.com.br;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+# ─── HTTPS ──────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    server_name share.hubnades.com.br;
+    ssl_certificate     /etc/letsencrypt/live/share.hubnades.com.br/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/share.hubnades.com.br/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Front e sinalizacao na MESMA origem: sem origem cruzada nao ha CORS.
+    location / {
+        proxy_pass         http://share-screen-web:80;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # ATENCAO: o Socket.IO precisa do upgrade para WebSocket. Sem as linhas de
+    # Upgrade/Connection, a pagina carrega inteira e NADA funciona — a sala nao
+    # e criada, ninguem entra. Parece bug da aplicacao, mas e o proxy.
+    location /socket.io/ {
+        proxy_pass         http://share-screen-server:3001;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       $host;
+
+        # A conexao fica ociosa entre eventos; o padrao de 60s a derrubaria e o
+        # cliente ficaria reconectando sem parar.
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    location /api/ {
+        proxy_pass       http://share-screen-server:3001;
+        proxy_set_header Host $host;
+    }
+}

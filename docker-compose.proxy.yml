@@ -1,0 +1,36 @@
+# Override para publicar atras de um proxy que ja existe no servidor —
+# no caso, o nginx do projeto `nades`, que ja ocupa as portas 80 e 443.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+#
+# O que muda:
+#
+# 1. Os containers entram na rede do outro projeto, para o nginx de la alcancar
+#    estes por nome em vez de por porta do host.
+#
+# 2. Ganham ALIASES proprios. Isso nao e cosmetico: o projeto `nades` ja tem um
+#    servico chamado `server`, e sem alias os dois responderiam pelo mesmo nome
+#    na rede compartilhada — o proxy acertaria o alvo errado, de forma
+#    intermitente e dificil de diagnosticar.
+
+services:
+  server:
+    networks:
+      default:
+      proxy:
+        aliases:
+          - share-screen-server
+
+  web:
+    networks:
+      default:
+      proxy:
+        aliases:
+          - share-screen-web
+
+networks:
+  proxy:
+    external: true
+    # Nome da rede criada pelo outro compose. Confirme com `docker network ls`;
+    # o padrao e <nome-da-pasta>_default.
+    name: ${PROXY_NETWORK:-nades_default}
