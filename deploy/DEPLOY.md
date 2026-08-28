@@ -164,6 +164,7 @@ novo so entra na imagem por ali.
 | **Carrega mas a sala nao e criada** | falta o upgrade para WebSocket no bloco `/socket.io/` |
 | "TURN nao configurado" | esperado sem coturn; so importa entre redes diferentes |
 | Botao de compartilhar desabilitado | acessando por HTTP; a captura exige contexto seguro |
+| `ER_ACCESS_DENIED_ERROR` no log do server | a senha do `.env` nao e a gravada no volume do MySQL |
 
 O penultimo e o mais enganoso: a pagina carrega inteira e parece bug da
 aplicacao, mas e o proxy.
@@ -173,6 +174,31 @@ Diagnostico:
 ```bash
 docker compose logs server --tail 30 && docker compose ps
 ```
+
+### Senha do banco que "nao funciona"
+
+O MySQL cria o usuario **apenas na primeira subida**, quando o volume nasce
+vazio. Trocar `MYSQL_PASSWORD` no `.env` depois disso nao altera o banco: o
+volume guarda a senha antiga, e o servidor passa a reportar
+`ER_ACCESS_DENIED_ERROR` — que parece erro de configuracao, mas e divergencia
+de estado.
+
+Confirme comparando as duas:
+
+```bash
+PASS=$(grep '^MYSQL_PASSWORD=' .env | cut -d= -f2-)
+docker compose exec -T mysql mysql -ushare -p"$PASS" -e "SELECT 1"
+```
+
+Se falhar e nao houver dado a preservar, recrie o volume:
+
+```bash
+docker compose down -v && docker compose up -d --build
+```
+
+`down -v` remove apenas os volumes DESTE projeto — outros compose no mesmo
+servidor nao sao afetados. Com historico de chat que importa, o caminho e
+alterar a senha do usuario dentro do MySQL em vez de recriar.
 
 ## TURN (so se precisar)
 
