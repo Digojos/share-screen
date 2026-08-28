@@ -172,6 +172,18 @@ VITE_SIGNALING_URL=https://sinalizacao.exemplo.com docker compose build web
 Para desenvolver, prefira o `npm run dev` abaixo: o Docker exige rebuild a cada
 alteracao.
 
+**Os dois modos disputam as mesmas portas.** O container `server` publica a 3001,
+que e a mesma do `npm run dev` — deixar a pilha em pe e rodar `npm run dev` da
+`EADDRINUSE`. Antes de voltar a desenvolver, derrube os servicos da aplicacao e
+deixe so o banco:
+
+```bash
+docker compose down && MYSQL_PORT=3307 docker compose up -d mysql
+```
+
+O segundo comando importa: com `DATABASE_URL` definida e o MySQL fora do ar, o
+servidor encerra no boot de proposito.
+
 ## Rodando localmente
 
 ```bash

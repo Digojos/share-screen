@@ -57,6 +57,10 @@ Escreva num `.tmp` e use `os.replace`.
 **MySQL do container fica na 3307.** Esta maquina ja tem um MySQL nativo na 3306.
 `MYSQL_PORT` controla isso no compose.
 
+**Docker e `npm run dev` disputam a 3001.** O servico `server` do compose publica
+a mesma porta. Antes de desenvolver: `docker compose down` e depois subir so o
+banco — deixar `DATABASE_URL` definida com o MySQL parado derruba o processo.
+
 **`DATABASE_URL` definida mas inacessivel derruba o processo** (de proposito:
 persistencia configurada e ignorada e pior que falhar alto). Sem a variavel, roda
 em memoria normalmente.
