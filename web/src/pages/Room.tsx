@@ -84,6 +84,10 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   const profile = VIDEO_PROFILES[profileId];
   const resolution = RESOLUTIONS[resolutionId];
   const room = useRoom(roomId, displayName);
+  // Extraidas do objeto para que a dependencia do efeito seja a FUNCAO (estavel)
+  // e nao o `room` inteiro, que muda a cada mensagem de chat — depender dele
+  // republicaria a midia sem parar.
+  const { publishMedia, setVideoProfile } = room;
   const share = useScreenShare(profile, resolution);
   const mic = useMicrophone();
   const isHost = room.role === 'host';
@@ -91,8 +95,8 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   // O perfil muda o teto de bitrate e o que sacrificar sob pressao de banda;
   // a track em si e reconfigurada dentro do useScreenShare.
   useEffect(() => {
-    room.setVideoProfile(profile);
-  }, [profile, room.setVideoProfile]);
+    setVideoProfile(profile);
+  }, [profile, setVideoProfile]);
 
   function setPeerVolume(peerId: string, volume: number) {
     setPeerVolumes((prev) => new Map(prev).set(peerId, volume));
@@ -131,8 +135,8 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   // Ponto unico de sincronizacao: qualquer mudanca de tela ou microfone e
   // publicada para todos os peers a partir daqui.
   useEffect(() => {
-    room.publishMedia(localMedia);
-  }, [localMedia, room.publishMedia]);
+    publishMedia(localMedia);
+  }, [localMedia, publishMedia]);
 
   async function handleCopyLink() {
     try {

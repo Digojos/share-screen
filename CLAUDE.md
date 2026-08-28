@@ -10,6 +10,8 @@ npm run dev          # servidor (3001) + web (5173) juntos
 npm run dev:server   # so a sinalizacao
 npm run dev:web      # so o front
 npm run typecheck    # tsc nos dois workspaces
+npm run lint         # eslint (pega dependencia de useEffect errada)
+npm test             # vitest no PeerManager
 npm run build        # server/dist + web/dist
 
 MYSQL_PORT=3307 docker compose up -d mysql   # banco (ver armadilha abaixo)
@@ -84,6 +86,10 @@ de `framesSent`.
 
 ## Verificacao
 
-Typecheck e build nao pegam os bugs que importam aqui — os dois ultimos so
-apareceram rodando o app com duas abas. Ha uma skill com o roteiro:
+`npm test` cobre a logica do `PeerManager` — perfect negotiation, fila de ICE e
+reaproveitamento de senders — que e onde os bugs reais apareceram. O CI
+(`.github/workflows/ci.yml`) roda typecheck, lint, testes e build a cada push.
+
+Nada disso substitui rodar o app: bug de midia passa por typecheck e build sem
+reclamar, e ja passou duas vezes. Ha uma skill com o roteiro de teste manual:
 `.claude/skills/testar-webrtc/`.
