@@ -15,7 +15,7 @@ Este roteiro existe porque ele foi reconstruido do zero seis vezes num unico dia
 ## 1. Suba a pilha em portas alternativas
 
 Nunca use 3001/5173: sao as portas do `npm run dev` da pessoa, e ocupa-las
-derruba o ambiente dela.
+derruba o ambiente dela. Marque os processos existentes antes (ver passo 6).
 
 ```bash
 PORT=3002 npm run dev:server > /dev/null 2>&1 &
@@ -95,17 +95,32 @@ Cada um destes ja foi um bug real:
 - **Host sai** — a sala encerra para os espectadores.
 - **Reentrar com o mesmo codigo** — a sala revive com o historico (se ha banco).
 
-## 6. Libere as portas por PID
+## 6. Marque antes, limpe depois
 
-Parar a task de background nao mata o filho do npm. Sobra um processo segurando
-a porta, e o proximo `npm run dev` morre com `EADDRINUSE` — o que ja aconteceu.
+**Antes de subir a pilha**, marque os processos que ja existiam:
 
 ```bash
-powershell -NoProfile -File .claude/skills/testar-webrtc/scripts/liberar-portas.ps1 3002 5175
+powershell -NoProfile -File .claude/skills/testar-webrtc/scripts/ambiente.ps1 -Marcar
 ```
 
-Confirme que 3001 e 5173 seguem livres (ou ocupadas pelo processo da pessoa, o
-que e esperado — nao mate essas).
+**Ao terminar**, limpe:
+
+```bash
+powershell -NoProfile -File .claude/skills/testar-webrtc/scripts/ambiente.ps1 -Limpar 3002 5175
+```
+
+A marcacao nao e burocracia — e o que torna a limpeza segura. Duas coisas
+justificam:
+
+- Parar a task de background nao mata o filho do npm, e liberar a porta nao mata
+  o `tsx watch` que supervisiona: ele sobrevive sem porta, invisivel, e reinicia
+  o servidor na proxima alteracao de arquivo. Uma sessao longa acumula dezenas.
+- Achar esses orfaos por heuristica **nao funciona**: o `npm run dev` do usuario
+  roda exatamente os mesmos comandos. Uma regra por idade de processo ja matou o
+  terminal de quem estava usando a maquina, no meio da sessao.
+
+Sem marcacao previa o script se recusa a matar por atribuicao, e apenas libera
+as portas pedidas.
 
 ## Relatando
 
