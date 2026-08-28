@@ -14,7 +14,9 @@ services:
       MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-6}
       HOST_GRACE_SECONDS: ${HOST_GRACE_SECONDS:-60}
     ports:
-      - '3001:3001'
+      # A porta no host e configuravel para nao colidir com um `npm run dev`
+      # em andamento, e porque num servidor ela costuma ser outra.
+      - '${SERVER_PORT:-3001}:3001'
     depends_on:
       mysql:
         condition: service_healthy
