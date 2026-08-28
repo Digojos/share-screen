@@ -287,14 +287,46 @@ Sem dominio proprio, `sslip.io` resolve: `203-0-113-10.sslip.io` ja aponta para
 **A armadilha:** o Socket.IO precisa de upgrade para WebSocket. Sem isso a
 pagina carrega inteira e nada funciona — parece bug da aplicacao, nao do proxy.
 
-## Deploy
+## Deploy num servidor
 
-1. `npm run build` gera `server/dist` e `web/dist`.
-2. Sirva `web/dist` como estatico (qualquer CDN) apontando `VITE_SIGNALING_URL`
-   para o dominio do servidor.
-3. Rode `node server/dist/index.js` atras de HTTPS/WSS e ajuste `CORS_ORIGIN`.
-4. Suba um coturn com IP publico (portas 3478 UDP/TCP + faixa de relay) ou
-   contrate um TURN gerenciado, e preencha `TURN_URLS`/`TURN_SECRET`.
+Requisitos: `git`, `docker` e o plugin `docker compose`.
+
+```bash
+git clone https://github.com/Digojos/share-screen.git
+cd share-screen
+cp .env.example .env
+```
+
+Edite o `.env`: `VITE_SIGNALING_URL` e `CORS_ORIGIN` recebem o **mesmo**
+endereco publico (com `https://`), e as senhas do banco devem ser trocadas.
+
+```bash
+docker compose build
+docker compose up -d mysql server web
+```
+
+Nada fica exposto ainda: as portas sao publicadas so em `127.0.0.1`. Quem
+entrega para fora e o nginx — ver `deploy/nginx.example.conf` e a secao acima.
+
+Sem dominio, use `sslip.io`: para o IP `203.0.113.10` o nome
+`share.203-0-113-10.sslip.io` ja resolve, e o certbot emite certificado normal.
+
+Para atualizar depois:
+
+```bash
+git pull && docker compose build && docker compose up -d
+```
+
+O `build` e obrigatorio: `VITE_SIGNALING_URL` e embutida no bundle, e o codigo
+novo so entra na imagem por ali.
+
+### TURN (opcional)
+
+Necessario quando a conexao direta falha entre redes diferentes. Descomente
+`TURN_URLS` e `TURN_SECRET` no `.env`, aponte para o proprio endereco do
+servidor, e suba `docker compose up -d coturn`. As portas 3478 (UDP e TCP) e a
+faixa de relay precisam estar abertas no firewall — inclusive no painel do
+provedor, que costuma ser separado do `ufw`.
 
 ## Testes
 

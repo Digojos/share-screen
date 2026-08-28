@@ -5,9 +5,13 @@ services:
       dockerfile: server/Dockerfile
     environment:
       PORT: 3001
-      # Origem do front servido pelo nginx abaixo.
-      CORS_ORIGIN: http://localhost:8080
-      STUN_URLS: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
+      # Origem publica do front. Em producao e o dominio servido pelo nginx —
+      # se nao bater, o `fetch` de /api/ice leva CORS, o app cai no fallback e
+      # anuncia "TURN nao configurado" mesmo com TURN no ar.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
       # Nome do servico na rede do compose — nao `localhost`, que dentro do
       # container aponta para o proprio container.
       DATABASE_URL: mysql://${MYSQL_USER:-share}:${MYSQL_PASSWORD:-share}@mysql:3306/${MYSQL_DATABASE:-share_screen}
