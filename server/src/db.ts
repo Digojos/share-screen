@@ -1,11 +1,19 @@
 import mysql from 'mysql2/promise';
 
 /**
- * O banco e OPCIONAL. Sem `DATABASE_URL` o servidor roda inteiramente em
- * memoria (comportamento original): salas morrem com o host e o chat e efemero.
- * Com o banco configurado, o codigo da sala e o historico sobrevivem.
+ * O banco e OPCIONAL. Sem configuracao o servidor roda inteiramente em memoria
+ * (comportamento original): salas morrem com o host e o chat e efemero. Com o
+ * banco configurado, o codigo da sala e o historico sobrevivem.
+ *
+ * Ha duas formas de configurar, e a ordem importa:
+ *
+ * 1. Variaveis separadas (`MYSQL_HOST`, `MYSQL_USER`, ...) — preferida. Senha
+ *    passa como valor, sem virar parte de uma URL.
+ * 2. `DATABASE_URL` — aceita por compatibilidade, mas exige que a senha esteja
+ *    percent-encoded. Uma senha com `/`, `@` ou `#` (comuns em geradores como
+ *    `openssl rand -base64`) quebra a URL em silencio e o servidor so reporta
+ *    "Access denied", o que aponta para o lugar errado.
  */
-const DATABASE_URL = process.env.DATABASE_URL;
 const CONNECT_RETRIES = Number(process.env.DB_CONNECT_RETRIES ?? 10);
 const CONNECT_RETRY_DELAY_MS = 2000;
 
@@ -28,6 +36,31 @@ const SCHEMA = [
        REFERENCES rooms (id) ON DELETE CASCADE
    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
+
+/**
+ * Monta a configuracao do pool. `null` significa "sem banco": o servidor segue
+ * em memoria.
+ */
+function buildPoolOptions(): mysql.PoolOptions | null {
+  const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, DATABASE_URL } = process.env;
+
+  const comum = { connectionLimit: 10, waitForConnections: true, charset: 'utf8mb4' } as const;
+
+  if (MYSQL_HOST && MYSQL_USER && MYSQL_DATABASE) {
+    return {
+      ...comum,
+      host: MYSQL_HOST,
+      port: Number(process.env.MYSQL_PORT ?? 3306),
+      user: MYSQL_USER,
+      password: MYSQL_PASSWORD ?? '',
+      database: MYSQL_DATABASE,
+    };
+  }
+
+  if (DATABASE_URL) return { ...comum, uri: DATABASE_URL };
+
+  return null;
+}
 
 export function isDatabaseEnabled(): boolean {
   return pool !== null;
@@ -59,20 +92,16 @@ function sleep(ms: number): Promise<void> {
  * persistencia configurada e ignorada e pior do que falhar alto.
  */
 export async function initDatabase(): Promise<void> {
-  if (!DATABASE_URL) {
-    console.log('[db] DATABASE_URL ausente — rodando em memoria, sem historico.');
+  const opcoes = buildPoolOptions();
+  if (!opcoes) {
+    console.log('[db] sem configuracao de banco — rodando em memoria, sem historico.');
     return;
   }
 
   // O container do MySQL costuma demorar alguns segundos a mais que o Node.
   for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt += 1) {
     try {
-      const candidate = mysql.createPool({
-        uri: DATABASE_URL,
-        connectionLimit: 10,
-        waitForConnections: true,
-        charset: 'utf8mb4',
-      });
+      const candidate = mysql.createPool(opcoes);
       const connection = await candidate.getConnection();
       try {
         for (const statement of SCHEMA) await connection.query(statement);
@@ -85,7 +114,8 @@ export async function initDatabase(): Promise<void> {
     } catch (error) {
       console.warn(`[db] tentativa ${attempt}/${CONNECT_RETRIES} falhou: ${describeDbError(error)}`);
       if (attempt === CONNECT_RETRIES) {
-        console.error('[db] nao foi possivel conectar. Suba o MySQL ou remova DATABASE_URL.');
+        console.error('[db] nao foi possivel conectar. Suba o MySQL, ou remova a');
+        console.error('[db] configuracao de banco para rodar em memoria.');
         process.exit(1);
       }
       await sleep(CONNECT_RETRY_DELAY_MS);

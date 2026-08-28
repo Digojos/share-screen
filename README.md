@@ -239,7 +239,8 @@ O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
 | `TURN_TTL_SECONDS` | server | Validade da credencial TURN (padrao 6h) |
 | `MAX_PARTICIPANTS` | server | Host + espectadores por sala (padrao 6) |
 | `HOST_GRACE_SECONDS` | server | Espera pelo retorno do host antes de encerrar (padrao 60) |
-| `DATABASE_URL` | server | MySQL para salas + historico; ausente = memoria |
+| `MYSQL_HOST` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` | server | MySQL para salas + historico; ausentes = memoria |
+| `DATABASE_URL` | server | Alternativa as anteriores; exige senha percent-encoded |
 | `CHAT_HISTORY_LIMIT` | server | Mensagens antigas enviadas no join (padrao 100) |
 | `VITE_SIGNALING_URL` | web | URL do servidor de sinalizacao |
 

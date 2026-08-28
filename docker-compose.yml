@@ -12,9 +12,19 @@ services:
       STUN_URLS: ${STUN_URLS:-stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302}
       TURN_URLS: ${TURN_URLS:-}
       TURN_SECRET: ${TURN_SECRET:-}
-      # Nome do servico na rede do compose — nao `localhost`, que dentro do
-      # container aponta para o proprio container.
-      DATABASE_URL: mysql://${MYSQL_USER:-share}:${MYSQL_PASSWORD:-share}@mysql:3306/${MYSQL_DATABASE:-share_screen}
+      # Variaveis separadas, e nao uma URL: interpolar a senha numa URL quebra
+      # em silencio quando ela contem `/`, `@` ou `#` — caracteres comuns em
+      # `openssl rand -base64`. O sintoma seria "Access denied", que aponta
+      # para o lugar errado.
+      #
+      # `mysql` e o nome do servico na rede do compose, nao `localhost`, que
+      # dentro do container aponta para o proprio container. A porta aqui e
+      # sempre 3306: MYSQL_PORT no .env controla apenas o mapeamento no host.
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-share}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-share}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-share_screen}
       MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-6}
       HOST_GRACE_SECONDS: ${HOST_GRACE_SECONDS:-60}
     ports:
