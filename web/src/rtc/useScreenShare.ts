@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ResolutionOption, VideoProfile } from './videoProfiles';
+import type { FrameRateOption, ResolutionOption, VideoProfile } from './videoProfiles';
 
 export interface ScreenShareState {
   stream: MediaStream | null;
@@ -32,18 +32,23 @@ function applyProfileToTrack(
   track: MediaStreamTrack,
   profile: VideoProfile,
   resolution: ResolutionOption,
+  frameRate: FrameRateOption,
 ): void {
   track.contentHint = profile.contentHint;
   void track
-    .applyConstraints(buildVideoConstraints(profile, resolution))
+    .applyConstraints(buildVideoConstraints(profile, resolution, frameRate))
     .catch((error) => console.warn('[captura] restricoes nao aceitas', error));
 }
 
 function buildVideoConstraints(
   profile: VideoProfile,
   resolution: ResolutionOption,
+  frameRate: FrameRateOption,
 ): MediaTrackConstraints {
-  const constraints: MediaTrackConstraints = { frameRate: { ideal: profile.frameRate } };
+  // `null` no seletor significa "segue o perfil" — e o padrao, e preserva o
+  // comportamento de quando o FPS vivia dentro da qualidade.
+  const fps = frameRate.value ?? profile.frameRate;
+  const constraints: MediaTrackConstraints = { frameRate: { ideal: fps } };
   if (resolution.maxWidth) constraints.width = { max: resolution.maxWidth };
   if (resolution.maxHeight) constraints.height = { max: resolution.maxHeight };
   return constraints;
@@ -75,6 +80,7 @@ function describeError(error: unknown): string {
 export function useScreenShare(
   profile: VideoProfile,
   resolution: ResolutionOption,
+  frameRate: FrameRateOption,
 ): ScreenShareControls {
   const [state, setState] = useState<ScreenShareState>({
     stream: null,
@@ -91,6 +97,8 @@ export function useScreenShare(
   profileRef.current = profile;
   const resolutionRef = useRef(resolution);
   resolutionRef.current = resolution;
+  const frameRateRef = useRef(frameRate);
+  frameRateRef.current = frameRate;
   /** Tracks vindas do getDisplayMedia. */
   const displayTracksRef = useRef<MediaStreamTrack[]>([]);
   const endedHandlerRef = useRef<(() => void) | null>(null);
@@ -125,7 +133,12 @@ export function useScreenShare(
       // usuario clica ali, a track termina sem passar pela nossa UI.
       const videoTrack = displayTracks.find((track) => track.kind === 'video');
       if (videoTrack) {
-        applyProfileToTrack(videoTrack, profileRef.current, resolutionRef.current);
+        applyProfileToTrack(
+          videoTrack,
+          profileRef.current,
+          resolutionRef.current,
+          frameRateRef.current,
+        );
         const handler = () => stop();
         endedHandlerRef.current = handler;
         videoTrack.addEventListener('ended', handler, { once: true });
@@ -147,7 +160,11 @@ export function useScreenShare(
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
-        video: buildVideoConstraints(profileRef.current, resolutionRef.current),
+        video: buildVideoConstraints(
+          profileRef.current,
+          resolutionRef.current,
+          frameRateRef.current,
+        ),
         audio: true,
         // Padrao do navegador, explicito para documentar a intencao: queremos o
         // audio do sistema sempre que ele for oferecido.
@@ -172,7 +189,11 @@ export function useScreenShare(
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
-        video: buildVideoConstraints(profileRef.current, resolutionRef.current),
+        video: buildVideoConstraints(
+          profileRef.current,
+          resolutionRef.current,
+          frameRateRef.current,
+        ),
         audio: true,
         // Padrao do navegador, explicito para documentar a intencao: queremos o
         // audio do sistema sempre que ele for oferecido.
@@ -196,8 +217,8 @@ export function useScreenShare(
   // precisar escolher a fonte de novo.
   useEffect(() => {
     const videoTrack = displayTracksRef.current.find((track) => track.kind === 'video');
-    if (videoTrack) applyProfileToTrack(videoTrack, profile, resolution);
-  }, [profile, resolution]);
+    if (videoTrack) applyProfileToTrack(videoTrack, profile, resolution, frameRate);
+  }, [profile, resolution, frameRate]);
 
   // Sair da sala ou fechar a aba nao pode deixar a camera/tela capturando.
   useEffect(() => () => {

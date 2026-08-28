@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import type { ScreenShareControls } from '../rtc/useScreenShare';
 import {
   CODECS,
+  FRAME_RATES,
   RESOLUTIONS,
   VIDEO_PROFILES,
   type CodecId,
+  type FrameRateId,
   type ResolutionId,
   type VideoProfileId,
 } from '../rtc/videoProfiles';
@@ -16,6 +18,8 @@ interface PlayerSettingsProps {
   onCodec: (id: CodecId) => void;
   resolutionId: ResolutionId;
   onResolution: (id: ResolutionId) => void;
+  frameRateId: FrameRateId;
+  onFrameRate: (id: FrameRateId) => void;
   share: ScreenShareControls;
 }
 
@@ -35,6 +39,8 @@ export function PlayerSettings({
   onCodec,
   resolutionId,
   onResolution,
+  frameRateId,
+  onFrameRate,
   share,
 }: PlayerSettingsProps) {
   const [aberto, setAberto] = useState(false);
@@ -92,6 +98,12 @@ export function PlayerSettings({
             opcoes={Object.values(RESOLUTIONS)}
             selecionado={resolutionId}
             onEscolher={(id) => onResolution(id as ResolutionId)}
+          />
+          <Grupo
+            titulo="Quadros por segundo"
+            opcoes={Object.values(FRAME_RATES)}
+            selecionado={frameRateId}
+            onEscolher={(id) => onFrameRate(id as FrameRateId)}
           />
 
           <section className="player-settings-grupo">

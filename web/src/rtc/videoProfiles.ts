@@ -124,3 +124,54 @@ export const CODECS: Record<CodecId, CodecOption> = {
 
 /** VP9 e o melhor equilibrio na maioria das maquinas; VP8 nunca deveria ser o padrao. */
 export const DEFAULT_CODEC: CodecId = 'vp9';
+
+/**
+ * Taxa de quadros.
+ *
+ * Vinha embutida no perfil (Apresentacao 30, Jogo 60), o que impedia
+ * combinacoes validas — "movimento fluido a 30" quando a CPU nao sustenta 60,
+ * por exemplo. Agora e uma escolha propria, com "Automatico" preservando o
+ * comportamento de antes.
+ *
+ * O valor e um PEDIDO (`frameRate: { ideal }`), nao uma garantia: a fonte pode
+ * entregar menos, e o encoder derruba quando falta CPU ou banda. O diagnostico
+ * do host mostra o que esta saindo de fato.
+ */
+export type FrameRateId = 'auto' | 'fps15' | 'fps30' | 'fps60';
+
+export interface FrameRateOption {
+  id: FrameRateId;
+  label: string;
+  hint: string;
+  /** null = segue o perfil de qualidade. */
+  value: number | null;
+}
+
+export const FRAME_RATES: Record<FrameRateId, FrameRateOption> = {
+  auto: {
+    id: 'auto',
+    label: 'Automatico',
+    hint: 'Segue a qualidade: 30 em Apresentacao, 60 em Jogo',
+    value: null,
+  },
+  fps15: {
+    id: 'fps15',
+    label: '15',
+    hint: 'Economiza banda e CPU; bom para slides e texto parado',
+    value: 15,
+  },
+  fps30: {
+    id: 'fps30',
+    label: '30',
+    hint: 'Suficiente para quase tudo, inclusive video',
+    value: 30,
+  },
+  fps60: {
+    id: 'fps60',
+    label: '60',
+    hint: 'Movimento fluido para jogos; dobra o custo de CPU e banda',
+    value: 60,
+  },
+};
+
+export const DEFAULT_FRAME_RATE: FrameRateId = 'auto';

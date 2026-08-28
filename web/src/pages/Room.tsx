@@ -13,11 +13,14 @@ import { useScreenShare } from '../rtc/useScreenShare';
 import {
   CODECS,
   DEFAULT_CODEC,
+  DEFAULT_FRAME_RATE,
   DEFAULT_PROFILE,
   DEFAULT_RESOLUTION,
+  FRAME_RATES,
   RESOLUTIONS,
   VIDEO_PROFILES,
   type CodecId,
+  type FrameRateId,
   type ResolutionId,
   type VideoProfileId,
 } from '../rtc/videoProfiles';
@@ -83,18 +86,20 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   const [profileId, setProfileId] = useState<VideoProfileId>(DEFAULT_PROFILE);
   const [resolutionId, setResolutionId] = useState<ResolutionId>(DEFAULT_RESOLUTION);
   const [codecId, setCodecId] = useState<CodecId>(DEFAULT_CODEC);
+  const [frameRateId, setFrameRateId] = useState<FrameRateId>(DEFAULT_FRAME_RATE);
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [mutedPeers, setMutedPeers] = useState<ReadonlySet<string>>(new Set());
   const [peerVolumes, setPeerVolumes] = useState<ReadonlyMap<string, number>>(new Map());
 
   const profile = VIDEO_PROFILES[profileId];
   const resolution = RESOLUTIONS[resolutionId];
+  const frameRate = FRAME_RATES[frameRateId];
   const room = useRoom(roomId, displayName);
   // Extraidas do objeto para que a dependencia do efeito seja a FUNCAO (estavel)
   // e nao o `room` inteiro, que muda a cada mensagem de chat — depender dele
   // republicaria a midia sem parar.
   const { publishMedia, setVideoProfile, setCodec } = room;
-  const share = useScreenShare(profile, resolution);
+  const share = useScreenShare(profile, resolution, frameRate);
   const mic = useMicrophone();
   const isHost = room.role === 'host';
 
@@ -246,6 +251,8 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
                     onCodec={setCodecId}
                     resolutionId={resolutionId}
                     onResolution={setResolutionId}
+                    frameRateId={frameRateId}
+                    onFrameRate={setFrameRateId}
                     share={share}
                   />
                 )}

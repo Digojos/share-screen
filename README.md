@@ -37,10 +37,21 @@ Para audiencias maiores o caminho e trocar o `PeerManager` por um cliente SFU
 
 Tela de trabalho e jogo pedem coisas opostas, entao o host escolhe:
 
-| Perfil | contentHint | FPS | Teto por espectador | Sob pressao de banda |
+| Perfil | contentHint | FPS sugerido | Teto por espectador | Sob pressao de banda |
 | --- | --- | --- | --- | --- |
 | Apresentacao | `text` | 30 | 2,5 Mbps | mantem resolucao |
 | Jogo | `motion` | 60 | 12 Mbps | mantem fluidez |
+
+### Quadros por segundo
+
+FPS e uma escolha propria (**Automatico / 15 / 30 / 60**), nao mais amarrada ao
+perfil. "Automatico" segue a qualidade — 30 em Apresentacao, 60 em Jogo — e e o
+padrao; escolher um valor explicito libera combinacoes que antes nao existiam,
+como movimento fluido a 30 quando a CPU nao sustenta 60.
+
+O valor e um **pedido** (`frameRate: { ideal }`), nao garantia: a fonte pode
+entregar menos e o encoder derruba sob pressao. O diagnostico do host mostra o
+que esta saindo de fato.
 
 ### Codec
 
