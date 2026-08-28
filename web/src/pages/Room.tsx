@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Chat } from '../components/Chat';
+import { PlayerSettings } from '../components/PlayerSettings';
 import { ShareControls } from '../components/ShareControls';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VoiceControls } from '../components/VoiceControls';
@@ -228,55 +229,25 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
             stream={isHost ? share.stream : viewerStream}
             muted={videoMuted}
             volume={videoVolume}
+            overlay={
+              isHost ? (
+                <PlayerSettings
+                  profileId={profileId}
+                  onProfile={setProfileId}
+                  codecId={codecId}
+                  onCodec={setCodecId}
+                  resolutionId={resolutionId}
+                  onResolution={setResolutionId}
+                  share={share}
+                />
+              ) : undefined
+            }
             placeholder={isHost ? 'Sua tela aparece aqui depois de compartilhar.' : viewerPlaceholder}
           />
 
           {isHost && (
             <>
               <ShareControls share={share} onStart={() => void share.start()} onStop={share.stop} />
-              <section className="controls">
-                <span className="muted">Qualidade:</span>
-                {Object.values(VIDEO_PROFILES).map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={option.id === profileId ? 'toggle on' : 'toggle off'}
-                    onClick={() => setProfileId(option.id)}
-                    title={option.hint}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                <span className="badge">{profile.hint}</span>
-              </section>
-              <section className="controls">
-                <span className="muted">Codec:</span>
-                {Object.values(CODECS).map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={option.id === codecId ? 'toggle on' : 'toggle off'}
-                    onClick={() => setCodecId(option.id)}
-                    title={option.hint}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-                <span className="badge">{CODECS[codecId].hint}</span>
-              </section>
-              <section className="controls">
-                <span className="muted">Resolucao:</span>
-                {Object.values(RESOLUTIONS).map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={option.id === resolutionId ? 'toggle on' : 'toggle off'}
-                    onClick={() => setResolutionId(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </section>
               {share.sharing && <HostDiagnostics stats={room.outboundStats} />}
             </>
           )}

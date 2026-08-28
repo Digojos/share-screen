@@ -9,7 +9,10 @@ espectadores entram por um codigo de sala. Sem instalacao, sem plugin.
 - **Voz**: chat de audio entre todos os participantes
 - **Persistencia**: MySQL (opcional) para salas e historico de chat
 
-O quadro de video tem botao de **tela cheia** (ou duplo clique no video).
+O quadro de video tem botao de **tela cheia** (ou duplo clique no video) e uma
+**engrenagem** com as configuracoes de transmissao — qualidade, codec, resolucao
+e o estado do audio do sistema. Microfone e som ficam fora dela, na barra: sao
+alternados o tempo todo e nao podem custar dois cliques.
 
 ## Como funciona
 

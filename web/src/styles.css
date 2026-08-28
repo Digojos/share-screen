@@ -407,21 +407,85 @@ input {
   align-items: center;
 }
 
-.video-fullscreen {
+/* Canto de controles do player: engrenagem + tela cheia. */
+.video-controles {
   position: absolute;
   right: 0.6rem;
   bottom: 0.6rem;
-  padding: 0.35rem 0.6rem;
-  font-size: 0.8rem;
-  background: rgba(15, 17, 21, 0.75);
-  border-color: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.video-frame:hover .video-fullscreen,
-.video-fullscreen:focus-visible {
+.video-frame:hover .video-controles,
+.video-controles:focus-within,
+/* Com o painel aberto os controles nao podem sumir ao tirar o mouse. */
+.video-controles:has(.player-settings-panel) {
   opacity: 1;
+}
+
+.video-fullscreen,
+.player-settings-toggle {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  background: rgba(15, 17, 21, 0.75);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.player-settings {
+  position: relative;
+}
+
+.player-settings-toggle {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.player-settings-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  width: 270px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  background: rgba(15, 17, 21, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+
+.player-settings-grupo h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.player-settings-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.player-settings-opcoes button {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.player-settings-dica {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--muted);
 }
 
 /* Em tela cheia o quadro ocupa a tela toda e o video precisa acompanhar. */

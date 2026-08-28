@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface VideoPlayerProps {
   stream: MediaStream | null;
@@ -7,6 +7,13 @@ interface VideoPlayerProps {
   /** 0 a 1 — o audio do host trafega junto do video, entao o volume dele mora aqui. */
   volume: number;
   placeholder: string;
+  /**
+   * Controles extras no canto do quadro (engrenagem de configuracoes). Entra
+   * como slot para o player continuar sem saber nada sobre perfis e codecs —
+   * e tambem para as configuracoes ficarem acessiveis em tela cheia, quando o
+   * resto da pagina some.
+   */
+  overlay?: ReactNode;
 }
 
 /** Safari/iOS expoem a tela cheia so no proprio elemento de video, com prefixo. */
@@ -15,7 +22,13 @@ interface VideoComTelaCheiaDaApple extends HTMLVideoElement {
   webkitSupportsFullscreen?: boolean;
 }
 
-export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerProps) {
+export function VideoPlayer({
+  stream,
+  muted,
+  volume,
+  placeholder,
+  overlay,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
@@ -113,16 +126,20 @@ export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerP
         onDoubleClick={() => void toggleFullscreen()}
       />
       {!stream && <p className="video-placeholder">{placeholder}</p>}
-      {stream && (
-        <button
-          type="button"
-          className="video-fullscreen"
-          onClick={() => void toggleFullscreen()}
-          title="Tambem funciona com duplo clique no video"
-        >
-          {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
-        </button>
-      )}
+
+      <div className="video-controles">
+        {overlay}
+        {stream && (
+          <button
+            type="button"
+            className="video-fullscreen"
+            onClick={() => void toggleFullscreen()}
+            title="Tambem funciona com duplo clique no video"
+          >
+            {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+          </button>
+        )}
+      </div>
 
       {fullscreenError && <p className="video-aviso">{fullscreenError}</p>}
 
