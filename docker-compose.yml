@@ -1,4 +1,36 @@
 services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      PORT: 3001
+      # Origem do front servido pelo nginx abaixo.
+      CORS_ORIGIN: http://localhost:8080
+      STUN_URLS: stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302
+      # Nome do servico na rede do compose — nao `localhost`, que dentro do
+      # container aponta para o proprio container.
+      DATABASE_URL: mysql://${MYSQL_USER:-share}:${MYSQL_PASSWORD:-share}@mysql:3306/${MYSQL_DATABASE:-share_screen}
+      MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-6}
+      HOST_GRACE_SECONDS: ${HOST_GRACE_SECONDS:-60}
+    ports:
+      - '3001:3001'
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        # Embutida no bundle em tempo de build: trocar exige rebuild.
+        VITE_SIGNALING_URL: ${VITE_SIGNALING_URL:-http://localhost:3001}
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      - server
+
   coturn:
     image: coturn/coturn:4.6-alpine
     # network_mode: host e o caminho mais confiavel para TURN em Linux — o relay

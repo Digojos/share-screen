@@ -15,6 +15,7 @@ npm test             # vitest no PeerManager
 npm run build        # server/dist + web/dist
 
 MYSQL_PORT=3307 docker compose up -d mysql   # banco (ver armadilha abaixo)
+MYSQL_PORT=3307 docker compose up -d mysql server web   # pilha inteira, front em :8080
 docker compose up -d coturn                   # TURN, so para testar entre redes
 ```
 

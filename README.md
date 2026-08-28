@@ -147,6 +147,31 @@ degradar em silencio para memoria.
 Escritas de chat sao feitas depois do `emit`: a latencia da conversa nao depende
 do banco, e uma falha de gravacao e registrada no log sem derrubar a sala.
 
+## Rodando com Docker
+
+Sobe tudo — banco, servidor e front — sem precisar de Node instalado:
+
+```bash
+MYSQL_PORT=3307 docker compose up -d mysql server web
+```
+
+Abra http://localhost:8080. O `MYSQL_PORT` so remapeia a porta no host para nao
+colidir com um MySQL ja instalado; entre containers a conexao e sempre
+`mysql:3306`.
+
+O front e servido por nginx com fallback para `index.html`, senao recarregar
+dentro de uma sala (`/room/CODIGO`) devolveria 404.
+
+**A `VITE_SIGNALING_URL` e embutida no bundle em tempo de build**, nao lida em
+runtime. Para apontar para outro host, reconstrua:
+
+```bash
+VITE_SIGNALING_URL=https://sinalizacao.exemplo.com docker compose build web
+```
+
+Para desenvolver, prefira o `npm run dev` abaixo: o Docker exige rebuild a cada
+alteracao.
+
 ## Rodando localmente
 
 ```bash
