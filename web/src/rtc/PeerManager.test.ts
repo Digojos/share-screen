@@ -220,7 +220,7 @@ describe('perfil de video', () => {
       throw new Error('nao deveria ser chamado com encodings vazio');
     };
 
-    expect(() => manager.setVideoProfile(VIDEO_PROFILES.jogo)).not.toThrow();
+    expect(() => manager.setVideoProfile(VIDEO_PROFILES.fluidez)).not.toThrow();
   });
 
   it('aplica teto de bitrate e preferencia de degradacao quando ha encodings', async () => {
@@ -235,13 +235,13 @@ describe('perfil de video', () => {
       aplicados.push(p);
     };
 
-    manager.setVideoProfile(VIDEO_PROFILES.jogo);
+    manager.setVideoProfile(VIDEO_PROFILES.fluidez);
     await vi.waitFor(() => expect(aplicados).toHaveLength(1));
 
     const parametros = aplicados[0]!;
     expect(parametros.degradationPreference).toBe('maintain-framerate');
     expect((parametros.encodings as Array<{ maxBitrate: number }>)[0]?.maxBitrate).toBe(
-      VIDEO_PROFILES.jogo.maxBitrate,
+      VIDEO_PROFILES.fluidez.maxBitrate,
     );
   });
 });

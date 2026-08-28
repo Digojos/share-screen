@@ -37,17 +37,24 @@ Para audiencias maiores o caminho e trocar o `PeerManager` por um cliente SFU
 
 Tela de trabalho e jogo pedem coisas opostas, entao o host escolhe:
 
-| Perfil | contentHint | FPS sugerido | Teto por espectador | Sob pressao de banda |
+A escolha e **o que sacrificar quando a banda ou a CPU nao dao conta** — nao se
+confunde com FPS, que e configuracao propria:
+
+| Prioridade | contentHint | FPS sugerido | Teto por espectador | Sob pressao |
 | --- | --- | --- | --- | --- |
-| Apresentacao | `text` | 30 | 2,5 Mbps | mantem resolucao |
-| Jogo | `motion` | 60 | 12 Mbps | mantem fluidez |
+| Nitidez | `text` | 30 | 2,5 Mbps | derruba quadros, mantem resolucao |
+| Fluidez | `motion` | 60 | 12 Mbps | derruba resolucao, mantem quadros |
 
 ### Quadros por segundo
 
 FPS e uma escolha propria (**Automatico / 15 / 30 / 60**), nao mais amarrada ao
-perfil. "Automatico" segue a qualidade — 30 em Apresentacao, 60 em Jogo — e e o
+perfil. "Automatico" segue a prioridade — 30 em Nitidez, 60 em Fluidez — e e o
 padrao; escolher um valor explicito libera combinacoes que antes nao existiam,
 como movimento fluido a 30 quando a CPU nao sustenta 60.
+
+Nao ha 90 nem 120: a captura de tela do navegador nao entrega isso, e o botao
+mentiria. O painel mostra o **teto real da fonte**, lido de
+`getCapabilities()`, para a decisao nao depender de palpite.
 
 O valor e um **pedido** (`frameRate: { ideal }`), nao garantia: a fonte pode
 entregar menos e o encoder derruba sob pressao. O diagnostico do host mostra o

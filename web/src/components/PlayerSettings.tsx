@@ -82,7 +82,7 @@ export function PlayerSettings({
       {aberto && (
         <div className="player-settings-panel" role="dialog" aria-label="Configuracoes">
           <Grupo
-            titulo="Qualidade"
+            titulo="Sob pressao, priorizar"
             opcoes={Object.values(VIDEO_PROFILES)}
             selecionado={profileId}
             onEscolher={(id) => onProfile(id as VideoProfileId)}
@@ -104,6 +104,11 @@ export function PlayerSettings({
             opcoes={Object.values(FRAME_RATES)}
             selecionado={frameRateId}
             onEscolher={(id) => onFrameRate(id as FrameRateId)}
+            rodape={
+              share.maxFrameRate
+                ? `Esta fonte aceita ate ${share.maxFrameRate} fps.`
+                : undefined
+            }
           />
 
           <section className="player-settings-grupo">
@@ -131,11 +136,14 @@ function Grupo({
   opcoes,
   selecionado,
   onEscolher,
+  rodape,
 }: {
   titulo: string;
   opcoes: Opcao[];
   selecionado: string;
   onEscolher: (id: string) => void;
+  /** Informacao medida do ambiente, exibida abaixo da dica da opcao. */
+  rodape?: string;
 }) {
   const atual = opcoes.find((o) => o.id === selecionado);
   return (
@@ -157,6 +165,7 @@ function Grupo({
       {/* A dica acompanha o que esta selecionado: sem ela o nome do codec nao
           diz nada sobre o que se ganha ou perde ao trocar. */}
       {atual?.hint && <p className="player-settings-dica">{atual.hint}</p>}
+      {rodape && <p className="player-settings-dica">{rodape}</p>}
     </section>
   );
 }

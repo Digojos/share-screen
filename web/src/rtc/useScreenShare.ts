@@ -14,6 +14,12 @@ export interface ScreenShareState {
    * diferentes, e para janela ela simplesmente nao existe.
    */
   displaySurface: string | null;
+  /**
+   * Maior taxa de quadros que a FONTE aceita, reportada pelo navegador. E o
+   * unico jeito honesto de saber se pedir 90 ou 120 faria diferenca nesta
+   * maquina — em vez de oferecer botoes que mentem.
+   */
+  maxFrameRate: number | null;
 }
 
 export interface ScreenShareControls extends ScreenShareState {
@@ -88,6 +94,7 @@ export function useScreenShare(
     error: null,
     hasSystemAudio: false,
     displaySurface: null,
+    maxFrameRate: null,
   });
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -114,6 +121,7 @@ export function useScreenShare(
       error: null,
       hasSystemAudio: false,
       displaySurface: null,
+      maxFrameRate: null,
     });
   }, []);
 
@@ -151,6 +159,9 @@ export function useScreenShare(
         error: null,
         hasSystemAudio: displayTracks.some((track) => track.kind === 'audio'),
         displaySurface: videoTrack?.getSettings().displaySurface ?? null,
+        // getCapabilities nao existe em todos os navegadores para captura de
+        // tela; ausente significa "nao sei", nao "sem limite".
+        maxFrameRate: videoTrack?.getCapabilities?.().frameRate?.max ?? null,
       }));
     },
     [stop],

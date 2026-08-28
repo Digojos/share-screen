@@ -1,11 +1,11 @@
 /**
- * Perfis de codificacao do video compartilhado.
+ * O que priorizar quando a banda ou a CPU nao dao conta de tudo.
  *
- * Tela de trabalho e jogo pedem coisas opostas: texto quer resolucao intacta
- * mesmo que o movimento engasgue; jogo quer fluidez mesmo perdendo nitidez.
- * Nao da para escolher um so, entao o host alterna.
+ * Nao se confunde com FPS, que e escolha propria: aqui se decide **o que
+ * sacrificar primeiro**. Texto quer resolucao intacta mesmo que o movimento
+ * engasgue; jogo quer o contrario. Um valor so nao serve para os dois.
  */
-export type VideoProfileId = 'apresentacao' | 'jogo';
+export type VideoProfileId = 'nitidez' | 'fluidez';
 
 export interface VideoProfile {
   id: VideoProfileId;
@@ -22,19 +22,19 @@ export interface VideoProfile {
 }
 
 export const VIDEO_PROFILES: Record<VideoProfileId, VideoProfile> = {
-  apresentacao: {
-    id: 'apresentacao',
-    label: 'Apresentacao',
-    hint: 'Texto nitido — codigo, slides, documentos',
+  nitidez: {
+    id: 'nitidez',
+    label: 'Nitidez',
+    hint: 'Preserva resolucao e deixa o movimento engasgar — codigo, slides',
     contentHint: 'text',
     frameRate: 30,
     maxBitrate: 2_500_000,
     degradationPreference: 'maintain-resolution',
   },
-  jogo: {
-    id: 'jogo',
-    label: 'Jogo',
-    hint: 'Movimento fluido — jogos e video',
+  fluidez: {
+    id: 'fluidez',
+    label: 'Fluidez',
+    hint: 'Preserva os quadros e deixa a imagem perder nitidez — jogos e video',
     contentHint: 'motion',
     frameRate: 60,
     // Teto alto de proposito: `maxBitrate` NAO force o envio a subir — o
@@ -45,7 +45,7 @@ export const VIDEO_PROFILES: Record<VideoProfileId, VideoProfile> = {
   },
 };
 
-export const DEFAULT_PROFILE: VideoProfileId = 'apresentacao';
+export const DEFAULT_PROFILE: VideoProfileId = 'nitidez';
 
 /**
  * Limite de resolucao da captura.
@@ -151,7 +151,7 @@ export const FRAME_RATES: Record<FrameRateId, FrameRateOption> = {
   auto: {
     id: 'auto',
     label: 'Automatico',
-    hint: 'Segue a qualidade: 30 em Apresentacao, 60 em Jogo',
+    hint: 'Segue a prioridade: 30 em Nitidez, 60 em Fluidez',
     value: null,
   },
   fps15: {
