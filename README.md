@@ -9,10 +9,12 @@ espectadores entram por um codigo de sala. Sem instalacao, sem plugin.
 - **Voz**: chat de audio entre todos os participantes
 - **Persistencia**: MySQL (opcional) para salas e historico de chat
 
-O quadro de video tem botao de **tela cheia** (ou duplo clique no video) e uma
-**engrenagem** com as configuracoes de transmissao — qualidade, codec, resolucao
-e o estado do audio do sistema. Microfone e som ficam fora dela, na barra: sao
-alternados o tempo todo e nao podem custar dois cliques.
+Os controles vivem no proprio player: **microfone** e **som** como icones
+sempre visiveis (um clique, com o estado mudo em vermelho), e — para o host —
+uma **engrenagem** com qualidade, codec, resolucao e o estado do audio do
+sistema, alem do botao de **tela cheia**. Engrenagem e tela cheia so aparecem
+ao passar o mouse; os de audio nao, porque saber se o proprio microfone esta
+aberto nao pode depender de hover.
 
 ## Como funciona
 

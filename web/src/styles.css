@@ -415,23 +415,57 @@ input {
   display: flex;
   align-items: flex-end;
   gap: 0.4rem;
+}
+
+/* A opacidade fica nos filhos, e nao no contêiner: opacity no pai cria um
+   contexto de composicao, e um filho com opacity 1 nao escapa dele — os
+   icones de audio ficariam apagados junto. */
+.video-fullscreen,
+.player-settings-toggle {
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.video-frame:hover .video-controles,
-.video-controles:focus-within,
-/* Com o painel aberto os controles nao podem sumir ao tirar o mouse. */
-.video-controles:has(.player-settings-panel) {
+.video-frame:hover .video-fullscreen,
+.video-frame:hover .player-settings-toggle,
+.video-fullscreen:focus-visible,
+.player-settings-toggle:focus-visible,
+/* Com o painel aberto o botao nao pode sumir ao tirar o mouse. */
+.player-settings:has(.player-settings-panel) .player-settings-toggle {
   opacity: 1;
 }
 
 .video-fullscreen,
-.player-settings-toggle {
+.player-settings-toggle,
+.player-icone {
   padding: 0.35rem 0.6rem;
   font-size: 0.8rem;
   background: rgba(15, 17, 21, 0.75);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.player-icone {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+}
+
+/* O estado precisa ser legivel de relance: mudo em vermelho, ativo neutro.
+   So o icone cortado nao basta num botao de 18px. */
+.player-icone.mudo {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.player-icone.ativo {
+  color: var(--text);
+}
+
+/* Microfone e som ficam sempre visiveis, ao contrario dos demais controles:
+   saber se o proprio microfone esta aberto nao pode depender de passar o
+   mouse por cima. */
+.player-icone {
+  opacity: 0.9;
 }
 
 .player-settings {

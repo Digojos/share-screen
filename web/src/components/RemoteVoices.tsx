@@ -1,48 +1,28 @@
 import { useEffect, useRef } from 'react';
-import type { MicrophoneControls } from '../rtc/useMicrophone';
 
-interface VoiceControlsProps {
-  mic: MicrophoneControls;
+interface RemoteVoicesProps {
   voiceStreams: Array<{ peerId: string; stream: MediaStream }>;
   speakerMuted: boolean;
-  onToggleSpeaker: () => void;
   mutedPeers: ReadonlySet<string>;
   /** Volume por peer, 0 a 1. Ausente = 1. */
   peerVolumes: ReadonlyMap<string, number>;
 }
 
 /**
- * Microfone do participante (todos falam) e o audio dos demais. O audio do host
- * chega junto do video, entao estes elementos cobrem apenas as vozes.
+ * Elementos de audio dos demais participantes. Nao desenha nada — os controles
+ * ficam no player e na lista de participantes — mas precisa estar montado:
+ * remover estes elementos silencia o chat de voz inteiro.
+ *
+ * A voz do host nao passa por aqui: ela chega junto do video, no mesmo stream.
  */
-export function VoiceControls({
-  mic,
+export function RemoteVoices({
   voiceStreams,
   speakerMuted,
-  onToggleSpeaker,
   mutedPeers,
   peerVolumes,
-}: VoiceControlsProps) {
+}: RemoteVoicesProps) {
   return (
-    <section className="controls">
-      <button
-        type="button"
-        className={mic.enabled ? 'toggle on' : 'toggle off'}
-        onClick={() => void mic.toggle()}
-      >
-        {!mic.available ? 'Entrar no audio' : mic.enabled ? 'Microfone ligado' : 'Microfone mudo'}
-      </button>
-
-      <button
-        type="button"
-        className={speakerMuted ? 'toggle off' : 'toggle on'}
-        onClick={onToggleSpeaker}
-      >
-        {speakerMuted ? 'Som desligado' : 'Som ligado'}
-      </button>
-
-      {mic.error && <span className="badge error">{mic.error}</span>}
-
+    <>
       {voiceStreams.map(({ peerId, stream }) => (
         <RemoteAudio
           key={peerId}
@@ -51,7 +31,7 @@ export function VoiceControls({
           volume={peerVolumes.get(peerId) ?? 1}
         />
       ))}
-    </section>
+    </>
   );
 }
 

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Chat } from '../components/Chat';
+import { AudioControls } from '../components/AudioControls';
 import { PlayerSettings } from '../components/PlayerSettings';
+import { RemoteVoices } from '../components/RemoteVoices';
 import { ShareControls } from '../components/ShareControls';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { VoiceControls } from '../components/VoiceControls';
 import type { InboundVideoStats, LocalMedia, OutboundVideoStats } from '../rtc/PeerManager';
 import { useMicrophone } from '../rtc/useMicrophone';
 import { useRoom } from '../rtc/useRoom';
@@ -230,17 +231,25 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
             muted={videoMuted}
             volume={videoVolume}
             overlay={
-              isHost ? (
-                <PlayerSettings
-                  profileId={profileId}
-                  onProfile={setProfileId}
-                  codecId={codecId}
-                  onCodec={setCodecId}
-                  resolutionId={resolutionId}
-                  onResolution={setResolutionId}
-                  share={share}
+              <>
+                {/* Audio e de todos; as configuracoes de transmissao, so do host. */}
+                <AudioControls
+                  mic={mic}
+                  speakerMuted={speakerMuted}
+                  onToggleSpeaker={() => setSpeakerMuted((value) => !value)}
                 />
-              ) : undefined
+                {isHost && (
+                  <PlayerSettings
+                    profileId={profileId}
+                    onProfile={setProfileId}
+                    codecId={codecId}
+                    onCodec={setCodecId}
+                    resolutionId={resolutionId}
+                    onResolution={setResolutionId}
+                    share={share}
+                  />
+                )}
+              </>
             }
             placeholder={isHost ? 'Sua tela aparece aqui depois de compartilhar.' : viewerPlaceholder}
           />
@@ -252,11 +261,9 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
             </>
           )}
 
-          <VoiceControls
-            mic={mic}
+          <RemoteVoices
             voiceStreams={room.voiceStreams}
             speakerMuted={speakerMuted}
-            onToggleSpeaker={() => setSpeakerMuted((value) => !value)}
             mutedPeers={mutedPeers}
             peerVolumes={peerVolumes}
           />
