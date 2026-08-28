@@ -300,6 +300,9 @@ pagina carrega inteira e nada funciona — parece bug da aplicacao, nao do proxy
 
 ## Deploy num servidor
 
+Roteiro completo, passo a passo, em **`deploy/DEPLOY.md`** — incluindo nginx,
+certificado e a tabela de sintomas quando algo falha. O resumo:
+
 Requisitos: `git`, `docker` e o plugin `docker compose`.
 
 ```bash
