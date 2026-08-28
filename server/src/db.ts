@@ -37,6 +37,18 @@ export function getPool(): mysql.Pool | null {
   return pool;
 }
 
+/**
+ * Erros do mysql2 costumam ter `message` vazia e trazer a causa em `code`
+ * (ECONNREFUSED, ER_ACCESS_DENIED_ERROR). Sem isso o log sai como
+ * "tentativa 1/10 falhou:" e nao ajuda ninguem.
+ */
+function describeDbError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as Error & { code?: string }).code;
+  const partes = [code, error.message].filter(Boolean);
+  return partes.length > 0 ? partes.join(' - ') : error.name;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -71,8 +83,7 @@ export async function initDatabase(): Promise<void> {
       console.log('[db] conectado, schema aplicado.');
       return;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[db] tentativa ${attempt}/${CONNECT_RETRIES} falhou: ${message}`);
+      console.warn(`[db] tentativa ${attempt}/${CONNECT_RETRIES} falhou: ${describeDbError(error)}`);
       if (attempt === CONNECT_RETRIES) {
         console.error('[db] nao foi possivel conectar. Suba o MySQL ou remova DATABASE_URL.');
         process.exit(1);

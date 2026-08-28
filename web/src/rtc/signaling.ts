@@ -36,9 +36,10 @@ export function joinRoom(
   socket: SignalingSocket,
   roomId: string,
   displayName: string,
+  token?: string,
 ): Promise<JoinResult> {
   return new Promise((resolve, reject) => {
-    socket.emit('room:join', { roomId, displayName }, ackToPromise(resolve, reject));
+    socket.emit('room:join', { roomId, displayName, token }, ackToPromise(resolve, reject));
   });
 }
 

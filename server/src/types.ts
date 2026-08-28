@@ -45,6 +45,13 @@ export interface JoinResult {
   roomId: string;
   peers: PeerInfo[];
   sharing: boolean;
+  /**
+   * Identidade que sobrevive a troca de socket. Guardada pelo cliente e
+   * reenviada no join seguinte para retomar o papel apos uma reconexao.
+   */
+  sessionToken: string;
+  /** true quando este join retomou uma sessao anterior em vez de criar uma nova. */
+  reclaimed: boolean;
   /** Mensagens anteriores da sala. Vazio quando nao ha banco configurado. */
   history: ChatMessage[];
 }
@@ -53,6 +60,8 @@ export interface ServerToClientEvents {
   'peer:joined': (peer: PeerInfo) => void;
   'peer:left': (payload: { peerId: string }) => void;
   'room:closed': (payload: { reason: string }) => void;
+  /** O host caiu; a sala aguarda o retorno dele por `graceSeconds`. */
+  'host:left': (payload: { graceSeconds: number }) => void;
   'share:state': (payload: { sharing: boolean }) => void;
   'signal:offer': (payload: { from: string; sdp: SessionDescription }) => void;
   'signal:answer': (payload: { from: string; sdp: SessionDescription }) => void;
@@ -62,7 +71,10 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   'room:create': (ack: Ack<{ roomId: string }>) => void;
-  'room:join': (payload: { roomId: string; displayName: string }, ack: Ack<JoinResult>) => void;
+  'room:join': (
+    payload: { roomId: string; displayName: string; token?: string },
+    ack: Ack<JoinResult>,
+  ) => void;
   'room:leave': () => void;
   'share:state': (payload: { sharing: boolean }) => void;
   'signal:offer': (payload: { to: string; sdp: SessionDescription }) => void;

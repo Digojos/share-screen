@@ -87,6 +87,23 @@ O **chat passa pelo servidor** (Socket.IO), nao por DataChannel: numa mesh o
 host teria de repassar mensagens entre espectadores, e o chat pararia de
 funcionar enquanto o P2P nao subisse.
 
+## Reconexao
+
+Uma oscilacao de rede nao encerra a sessao. O socket reconecta sozinho e o
+cliente **reentra na sala automaticamente**, apresentando um token de sessao que
+o servidor usa para reconhecer quem voltou — o socket id muda a cada reconexao,
+entao ele nao serve como identidade.
+
+Quando quem cai e o **host**, a sala fica viva por `HOST_GRACE_SECONDS`
+(padrao 60) aguardando o retorno. Se ele volta a tempo, retoma a posse e a
+malha se refaz; se nao volta, a sala encerra para todos.
+
+Numa queda curta a pagina do host nao recarrega, entao a captura de tela
+continua viva: **a transmissao volta sozinha, sem novo seletor**.
+
+O token fica no `sessionStorage` (nao no `localStorage`) porque a identidade e
+por aba — duas abas do mesmo navegador sao dois participantes.
+
 ## Persistencia (opcional)
 
 Sem `DATABASE_URL` o servidor roda inteiramente em memoria: a sala morre quando
@@ -144,6 +161,7 @@ O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
 | `TURN_SECRET` | server | Deve casar com o `static-auth-secret` do coturn |
 | `TURN_TTL_SECONDS` | server | Validade da credencial TURN (padrao 6h) |
 | `MAX_PARTICIPANTS` | server | Host + espectadores por sala (padrao 6) |
+| `HOST_GRACE_SECONDS` | server | Espera pelo retorno do host antes de encerrar (padrao 60) |
 | `DATABASE_URL` | server | MySQL para salas + historico; ausente = memoria |
 | `CHAT_HISTORY_LIMIT` | server | Mensagens antigas enviadas no join (padrao 100) |
 | `VITE_SIGNALING_URL` | web | URL do servidor de sinalizacao |
@@ -176,6 +194,18 @@ O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
 3. Rode `node server/dist/index.js` atras de HTTPS/WSS e ajuste `CORS_ORIGIN`.
 4. Suba um coturn com IP publico (portas 3478 UDP/TCP + faixa de relay) ou
    contrate um TURN gerenciado, e preencha `TURN_URLS`/`TURN_SECRET`.
+
+## Testes
+
+```bash
+npm test          # Vitest no PeerManager
+npm run typecheck
+npm run build
+```
+
+Os testes cobrem perfect negotiation, fila de candidatos ICE e reaproveitamento
+de senders — a logica onde os bugs reais apareceram. Vale saber que `typecheck`
+e `build` passam felizes com bug de midia; foi o que aconteceu duas vezes.
 
 ## Verificacao
 

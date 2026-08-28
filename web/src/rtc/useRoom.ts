@@ -9,9 +9,10 @@ import {
   type PeerConnectionState,
 } from './PeerManager';
 import { connectSignaling, fetchIceConfig, joinRoom, type SignalingSocket } from './signaling';
+import { loadSessionToken, saveSessionToken } from '../session';
 import type { VideoProfile } from './videoProfiles';
 
-export type RoomStatus = 'connecting' | 'joined' | 'error' | 'closed' | 'disconnected';
+export type RoomStatus = 'connecting' | 'joined' | 'reconnecting' | 'error' | 'closed';
 
 export interface RemotePeer extends PeerInfo {
   connection: PeerConnectionState;
@@ -30,6 +31,8 @@ export interface RoomSession {
   voiceStreams: Array<{ peerId: string; stream: MediaStream }>;
   /** O host esta transmitindo neste momento? */
   hostSharing: boolean;
+  /** Segundos de carencia enquanto o host esta fora; null quando ele esta presente. */
+  hostAwaySeconds: number | null;
   hasTurn: boolean;
   /** Diagnostico do video recebido; null enquanto nada chega. */
   videoStats: InboundVideoStats | null;
@@ -40,10 +43,24 @@ export interface RoomSession {
   setVideoProfile: (profile: VideoProfile) => void;
 }
 
+/** Une historico e mensagens ja em tela, sem repetir nem perder nada. */
+function mesclarMensagens(anteriores: ChatMessage[], historico: ChatMessage[]): ChatMessage[] {
+  if (historico.length === 0) return anteriores;
+  const porId = new Map(historico.map((m) => [m.id, m]));
+  for (const mensagem of anteriores) porId.set(mensagem.id, mensagem);
+  return [...porId.values()].sort((a, b) => a.ts - b.ts);
+}
+
 /**
  * Orquestra a sessao de sala: socket de sinalizacao, conexoes WebRTC, lista de
- * participantes e chat. Toda a montagem/desmontagem acontece num unico efeito
- * para que sair da pagina feche socket e peer connections juntos.
+ * participantes e chat.
+ *
+ * A montagem da sessao roda a cada `connect`, e nao uma unica vez, porque o
+ * socket reconecta sozinho apos uma queda de rede — e com um id novo, o que
+ * invalida todas as RTCPeerConnection anteriores. Os listeners de sala, por
+ * outro lado, sao registrados uma vez so: registra-los junto da montagem
+ * empilharia duplicatas a cada reconexao, e o sintoma (mensagem de chat
+ * aparecendo duas vezes) e facil de nao perceber.
  */
 export function useRoom(roomId: string, displayName: string): RoomSession {
   const [status, setStatus] = useState<RoomStatus>('connecting');
@@ -54,6 +71,7 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [hostSharing, setHostSharing] = useState(false);
+  const [hostAwaySeconds, setHostAwaySeconds] = useState<number | null>(null);
   const [hasTurn, setHasTurn] = useState(true);
   const [videoStats, setVideoStats] = useState<InboundVideoStats | null>(null);
   const [outboundStats, setOutboundStats] = useState<OutboundVideoStats | null>(null);
@@ -62,33 +80,32 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
   const managerRef = useRef<PeerManager | null>(null);
   /** Guarda a midia caso ela seja publicada antes do join terminar. */
   const pendingMediaRef = useRef<LocalMedia>(EMPTY_MEDIA);
+  /** O perfil escolhido precisa sobreviver a troca de PeerManager na reconexao. */
+  const profileRef = useRef<VideoProfile | null>(null);
+  /** Distingue "nunca conectou" (erro) de "caiu e esta voltando" (reconexao). */
+  const joinedOnceRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     const socket = connectSignaling();
     socketRef.current = socket;
 
-    socket.on('connect_error', () => {
-      if (!cancelled) {
-        setStatus('error');
-        setError('Nao foi possivel falar com o servidor de sinalizacao.');
-      }
-    });
+    /**
+     * Entra na sala e reconstroi a malha. Roda na primeira conexao e em cada
+     * reconexao — os peers antigos morreram junto com o socket id anterior.
+     */
+    async function setupSession(): Promise<void> {
+      managerRef.current?.close();
+      managerRef.current = null;
+      setRemoteStreams(new Map());
 
-    socket.on('disconnect', (reason) => {
-      if (cancelled || reason === 'io client disconnect') return;
-      setStatus('disconnected');
-      setError('Conexao com o servidor perdida. Recarregue a pagina para voltar.');
-    });
-
-    void (async () => {
       const iceConfig = await fetchIceConfig(roomId);
       if (cancelled) return;
       setHasTurn(iceConfig.hasTurn);
 
       let joined;
       try {
-        joined = await joinRoom(socket, roomId, displayName);
+        joined = await joinRoom(socket, roomId, displayName, loadSessionToken(roomId));
       } catch (joinError) {
         if (cancelled) return;
         setStatus('error');
@@ -96,6 +113,8 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
         return;
       }
       if (cancelled) return;
+
+      saveSessionToken(roomId, joined.sessionToken);
 
       const manager = new PeerManager(joined.selfId, iceConfig.iceServers, {
         onOffer: (to, sdp) => socket.emit('signal:offer', { to, sdp }),
@@ -108,59 +127,111 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
         },
       });
       managerRef.current = manager;
+      joinedOnceRef.current = true;
 
       setSelfId(joined.selfId);
       setRole(joined.role);
       setHostSharing(joined.sharing);
+      setHostAwaySeconds(null);
       setPeers(joined.peers.map((peer) => ({ ...peer, connection: 'new' })));
-      // Historico vindo do servidor (vazio quando nao ha banco configurado).
-      setMessages(joined.history);
+      // O historico e MESCLADO, nunca substituido: numa reconexao ele vem vazio
+      // (sem banco) ou truncado no limite do servidor, e trocar a lista apagaria
+      // a conversa que a pessoa esta lendo.
+      setMessages((anteriores) => mesclarMensagens(anteriores, joined.history));
+      setError(null);
       setStatus('joined');
 
-      // A midia pode ter sido publicada antes do join concluir.
+      // Perfil e midia sobrevivem a reconexao: numa oscilacao curta a pagina
+      // nao recarregou, entao a captura de tela continua viva e a transmissao
+      // volta sozinha, sem novo seletor.
+      if (profileRef.current) manager.setVideoProfile(profileRef.current);
       manager.setLocalMedia(pendingMediaRef.current);
+      if (pendingMediaRef.current.video) {
+        socket.emit('share:state', { sharing: true });
+      }
 
       // Malha completa: todos se conectam com todos, porque qualquer um pode
       // falar. Quem nao tem midia ainda cria a conexao sem negociar nada.
       for (const peer of joined.peers) manager.addPeer(peer.id);
+    }
 
-      socket.on('peer:joined', (peer) => {
-        setPeers((prev) => [...prev, { ...peer, connection: 'new' }]);
-        manager.addPeer(peer.id);
+    socket.on('connect', () => {
+      if (!cancelled) void setupSession();
+    });
+
+    socket.on('connect_error', () => {
+      if (cancelled) return;
+      // Falhar antes do primeiro join e erro; depois disso o socket.io segue
+      // tentando sozinho, e mostrar "erro" seria mentira.
+      if (joinedOnceRef.current) {
+        setStatus('reconnecting');
+      } else {
+        setStatus('error');
+        setError('Nao foi possivel falar com o servidor de sinalizacao.');
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      if (cancelled || reason === 'io client disconnect') return;
+      managerRef.current?.close();
+      managerRef.current = null;
+      setStatus('reconnecting');
+      setError(null);
+    });
+
+    // --- Listeners de sala: registrados UMA vez, leem o manager por ref ---
+
+    socket.on('peer:joined', (peer) => {
+      setPeers((prev) => [...prev.filter((p) => p.id !== peer.id), { ...peer, connection: 'new' }]);
+      // O host voltando encerra o aviso de carencia.
+      if (peer.role === 'host') setHostAwaySeconds(null);
+      managerRef.current?.addPeer(peer.id);
+    });
+
+    socket.on('peer:left', ({ peerId }) => {
+      managerRef.current?.removePeer(peerId);
+      setPeers((prev) => prev.filter((p) => p.id !== peerId));
+      setRemoteStreams((prev) => {
+        const next = new Map(prev);
+        next.delete(peerId);
+        return next;
       });
+    });
 
-      socket.on('peer:left', ({ peerId }) => {
-        manager.removePeer(peerId);
-        setPeers((prev) => prev.filter((p) => p.id !== peerId));
-        setRemoteStreams((prev) => {
-          const next = new Map(prev);
-          next.delete(peerId);
-          return next;
-        });
-      });
+    socket.on('host:left', ({ graceSeconds }) => {
+      setHostAwaySeconds(graceSeconds);
+      setHostSharing(false);
+    });
 
-      socket.on('room:closed', ({ reason }) => {
-        manager.close();
-        setStatus('closed');
-        setError(reason);
-        setRemoteStreams(new Map());
-      });
+    socket.on('room:closed', ({ reason }) => {
+      managerRef.current?.close();
+      managerRef.current = null;
+      setStatus('closed');
+      setError(reason);
+      setRemoteStreams(new Map());
+    });
 
-      // O stream remoto NAO e descartado quando o host para de transmitir: ele
-      // usa `replaceTrack`, entao `ontrack` nao dispara de novo num segundo
-      // compartilhamento. Quem decide exibir ou nao e a UI, via `hostSharing`.
-      socket.on('share:state', ({ sharing }) => setHostSharing(sharing));
+    // O stream remoto NAO e descartado quando o host para de transmitir: ele
+    // usa `replaceTrack`, entao `ontrack` nao dispara de novo num segundo
+    // compartilhamento. Quem decide exibir ou nao e a UI, via `hostSharing`.
+    socket.on('share:state', ({ sharing }) => setHostSharing(sharing));
 
-      socket.on('signal:offer', ({ from, sdp }) => void manager.handleDescription(from, sdp));
-      socket.on('signal:answer', ({ from, sdp }) => void manager.handleDescription(from, sdp));
-      socket.on('signal:ice', ({ from, candidate }) => void manager.handleIceCandidate(from, candidate));
-      socket.on('chat:message', (message) => setMessages((prev) => [...prev, message]));
-    })();
+    socket.on('signal:offer', ({ from, sdp }) => {
+      void managerRef.current?.handleDescription(from, sdp);
+    });
+    socket.on('signal:answer', ({ from, sdp }) => {
+      void managerRef.current?.handleDescription(from, sdp);
+    });
+    socket.on('signal:ice', ({ from, candidate }) => {
+      void managerRef.current?.handleIceCandidate(from, candidate);
+    });
+    socket.on('chat:message', (message) => setMessages((prev) => [...prev, message]));
 
     return () => {
       cancelled = true;
       managerRef.current?.close();
       managerRef.current = null;
+      joinedOnceRef.current = false;
       socket.emit('room:leave');
       socket.removeAllListeners();
       socket.disconnect();
@@ -168,8 +239,8 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
     };
   }, [roomId, displayName]);
 
-  // Amostra o fluxo de entrada a cada 2s. E o que separa "nada chegou" de
-  // "chegou e nao renderizou" sem precisar abrir o chrome://webrtc-internals.
+  // Amostra o fluxo a cada 2s. E o que separa "nada chegou" de "chegou e nao
+  // renderizou" sem precisar abrir o chrome://webrtc-internals.
   useEffect(() => {
     if (status !== 'joined') return undefined;
     // Quem assiste mede o que chega; quem transmite mede o que sai (e por que
@@ -203,11 +274,12 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
     socketRef.current?.emit('chat:message', { text: trimmed });
   }, []);
 
-  /** Publica a midia local (tela e/ou microfone) para todos os peers. */
   const setVideoProfile = useCallback((profile: VideoProfile) => {
+    profileRef.current = profile;
     managerRef.current?.setVideoProfile(profile);
   }, []);
 
+  /** Publica a midia local (tela e/ou microfone) para todos os peers. */
   const publishMedia = useCallback((media: LocalMedia) => {
     pendingMediaRef.current = media;
     managerRef.current?.setLocalMedia(media);
@@ -226,6 +298,7 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
       remoteStream,
       voiceStreams,
       hostSharing,
+      hostAwaySeconds,
       hasTurn,
       videoStats,
       outboundStats,
@@ -233,6 +306,6 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
       publishMedia,
       setVideoProfile,
     }),
-    [status, error, role, selfId, peers, messages, remoteStream, voiceStreams, hostSharing, hasTurn, videoStats, outboundStats, sendChat, publishMedia, setVideoProfile],
+    [status, error, role, selfId, peers, messages, remoteStream, voiceStreams, hostSharing, hostAwaySeconds, hasTurn, videoStats, outboundStats, sendChat, publishMedia, setVideoProfile],
   );
 }

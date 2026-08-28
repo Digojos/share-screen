@@ -144,7 +144,9 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
     }
   }
 
-  if (room.status === 'error' || room.status === 'closed' || room.status === 'disconnected') {
+  // `reconnecting` NAO cai aqui: a sessao pode voltar sozinha, e trocar a tela
+  // por uma pagina de erro descartaria a captura ainda viva do host.
+  if (room.status === 'error' || room.status === 'closed') {
     return (
       <main className="room-message">
         <h1>{room.status === 'closed' ? 'Sala encerrada' : 'Nao foi possivel continuar'}</h1>
@@ -188,6 +190,18 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
           </Link>
         </div>
       </header>
+
+      {room.status === 'reconnecting' && (
+        <p className="badge warn">
+          Conexao perdida. Reconectando... A transmissao volta sozinha.
+        </p>
+      )}
+
+      {room.hostAwaySeconds !== null && (
+        <p className="badge warn">
+          O host caiu. A sala fica aberta por ate {room.hostAwaySeconds}s aguardando o retorno.
+        </p>
+      )}
 
       {!room.hasTurn && (
         <p className="badge warn">

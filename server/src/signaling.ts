@@ -2,13 +2,16 @@ import type { Server, Socket } from 'socket.io';
 import {
   canSignal,
   createRoom,
+  destroyRoom,
   getRoomOfSocket,
+  HOST_GRACE_SECONDS,
   joinRoom,
   leaveRoom,
   listPeers,
   newMessageId,
   setSharing,
   type JoinError,
+  type Room,
 } from './rooms.js';
 import { loadRecentMessages, persistMessage, touchRoom } from './store.js';
 import {
@@ -59,14 +62,15 @@ export function registerSignaling(io: IoServer, socket: IoSocket): void {
     if (typeof ack !== 'function') return;
     const roomId = String(payload?.roomId ?? '').trim().toUpperCase();
     const displayName = String(payload?.displayName ?? '').trim();
+    const token = payload?.token ? String(payload.token) : undefined;
 
-    const result = await joinRoom(roomId, socket.id, displayName);
+    const result = await joinRoom(roomId, socket.id, displayName, token);
     if ('error' in result) {
       ack({ ok: false, error: JOIN_ERROR_MESSAGES[result.error] });
       return;
     }
 
-    const { room, participant } = result;
+    const { room, participant, reclaimed } = result;
     void socket.join(room.id);
     socket.to(room.id).emit('peer:joined', {
       id: participant.id,
@@ -87,6 +91,8 @@ export function registerSignaling(io: IoServer, socket: IoSocket): void {
         role: participant.role,
         peers: listPeers(room, socket.id),
         sharing: room.sharing,
+        sessionToken: participant.sessionToken,
+        reclaimed,
         history,
       },
     });
@@ -151,13 +157,31 @@ function handleDeparture(io: IoServer, socket: IoSocket): void {
   const outcome = leaveRoom(socket.id);
   if (!outcome) return;
 
-  const { room, roomClosed } = outcome;
-  if (roomClosed) {
-    // O host saiu: sem fonte de midia a sala nao faz sentido, entao encerra.
-    io.to(room.id).emit('room:closed', { reason: 'O host encerrou a transmissao.' });
-    io.socketsLeave(room.id);
-  } else {
-    socket.to(room.id).emit('peer:left', { peerId: socket.id });
-  }
+  const { room, wasHost } = outcome;
+
+  // Em qualquer caso os outros precisam fechar a RTCPeerConnection morta: o
+  // socket id nao volta, mesmo que a pessoa reconecte em seguida.
+  socket.to(room.id).emit('peer:left', { peerId: socket.id });
   void socket.leave(room.id);
+
+  if (!wasHost) return;
+
+  // O host caiu. Uma oscilacao de rede de poucos segundos nao pode encerrar a
+  // reuniao de todo mundo, entao a sala fica viva aguardando o retorno — que e
+  // reconhecido pelo token de sessao, ja que o socket id sera outro.
+  socket.to(room.id).emit('share:state', { sharing: false });
+  io.to(room.id).emit('host:left', { graceSeconds: HOST_GRACE_SECONDS });
+  startGraceTimer(io, room);
+}
+
+function startGraceTimer(io: IoServer, room: Room): void {
+  if (room.closeTimer) return;
+  room.closeTimer = setTimeout(() => {
+    room.closeTimer = null;
+    // O host pode ter voltado e saido de novo; so encerra se ainda nao ha host.
+    if (room.hostId !== null) return;
+    io.to(room.id).emit('room:closed', { reason: 'O host nao retornou.' });
+    io.socketsLeave(room.id);
+    destroyRoom(room);
+  }, HOST_GRACE_SECONDS * 1000);
 }

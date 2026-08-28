@@ -4,6 +4,8 @@ import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH, type PeerInfo, type Role } from '
 
 export interface Participant extends PeerInfo {
   joinedAt: number;
+  /** Identidade que sobrevive a troca de socket numa reconexao. */
+  sessionToken: string;
 }
 
 export interface Room {
@@ -12,16 +14,26 @@ export interface Room {
   sharing: boolean;
   createdAt: number;
   participants: Map<string, Participant>;
+  /** Timer de carencia ativo enquanto a sala espera o host voltar. */
+  closeTimer: NodeJS.Timeout | null;
 }
 
 /** Host + espectadores. Acima disso o upload do host satura numa topologia mesh. */
 const MAX_PARTICIPANTS = Number(process.env.MAX_PARTICIPANTS ?? 6);
 /** Salas criadas mas nunca ocupadas sao varridas depois disso. */
 const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
+/** Quanto tempo a sala aguarda o host voltar antes de encerrar. */
+export const HOST_GRACE_SECONDS = Number(process.env.HOST_GRACE_SECONDS ?? 60);
 
 const rooms = new Map<string, Room>();
 /** socketId -> roomId, para resolver o `disconnect` sem varrer todas as salas. */
 const socketToRoom = new Map<string, string>();
+/**
+ * token -> sala e papel. Sobrevive a saida do participante de proposito: e o
+ * que permite reconhecer quem volta durante a carencia, ja que o socket id
+ * muda a cada reconexao.
+ */
+const tokenIndex = new Map<string, { roomId: string; role: Role }>();
 
 function generateCode(): string {
   let code = '';
@@ -38,6 +50,7 @@ function blankRoom(id: string): Room {
     sharing: false,
     createdAt: Date.now(),
     participants: new Map(),
+    closeTimer: null,
   };
 }
 
@@ -68,7 +81,8 @@ export async function joinRoom(
   roomId: string,
   socketId: string,
   displayName: string,
-): Promise<{ room: Room; participant: Participant } | { error: JoinError }> {
+  token?: string,
+): Promise<{ room: Room; participant: Participant; reclaimed: boolean } | { error: JoinError }> {
   const code = roomId.toUpperCase();
   let room = rooms.get(code);
 
@@ -82,31 +96,70 @@ export async function joinRoom(
 
   if (!room) return { error: 'room_not_found' };
   if (socketToRoom.has(socketId)) return { error: 'already_joined' };
-  if (room.participants.size >= MAX_PARTICIPANTS) return { error: 'room_full' };
+
+  // Quem volta com token valido retoma seu papel. So vale se o papel ainda
+  // estiver disponivel: se outra pessoa ja virou host nesse meio tempo, o
+  // retorno entra como espectador em vez de disputar a posse.
+  const anterior = token ? tokenIndex.get(token) : undefined;
+  const podeRetomar = anterior?.roomId === room.id && (anterior.role === 'viewer' || room.hostId === null);
+  const reclaimed = Boolean(podeRetomar);
+
+  if (!reclaimed && room.participants.size >= MAX_PARTICIPANTS) {
+    return { error: 'room_full' };
+  }
 
   // O primeiro a entrar vira host; os demais entram como espectadores.
-  const role: Role = room.hostId === null ? 'host' : 'viewer';
+  const role: Role = reclaimed && anterior ? anterior.role : room.hostId === null ? 'host' : 'viewer';
+  const sessionToken = reclaimed && token ? token : randomUUID();
+
   const participant: Participant = {
     id: socketId,
     displayName: displayName.slice(0, 40) || 'Anonimo',
     role,
     joinedAt: Date.now(),
+    sessionToken,
   };
 
   room.participants.set(socketId, participant);
-  if (role === 'host') room.hostId = socketId;
+  if (role === 'host') {
+    room.hostId = socketId;
+    cancelCloseTimer(room);
+  }
   socketToRoom.set(socketId, room.id);
+  tokenIndex.set(sessionToken, { roomId: room.id, role });
 
-  return { room, participant };
+  return { room, participant, reclaimed };
+}
+
+export function cancelCloseTimer(room: Room): void {
+  if (!room.closeTimer) return;
+  clearTimeout(room.closeTimer);
+  room.closeTimer = null;
+}
+
+/** Encerra a sala de vez: participantes, indices e registro em memoria. */
+export function destroyRoom(room: Room): void {
+  cancelCloseTimer(room);
+  for (const participant of room.participants.values()) {
+    socketToRoom.delete(participant.id);
+    tokenIndex.delete(participant.sessionToken);
+  }
+  room.participants.clear();
+  rooms.delete(room.id);
 }
 
 export interface LeaveOutcome {
   room: Room;
   participant: Participant;
-  /** true quando quem saiu era o host: a sala inteira e encerrada. */
-  roomClosed: boolean;
+  /** true quando quem saiu era o host: a sala entra em carencia. */
+  wasHost: boolean;
 }
 
+/**
+ * Tira o participante da sala. A sala NAO e destruida aqui quando o host sai —
+ * quem decide isso e o `signaling`, que controla o timer de carencia. O token
+ * tambem sobrevive, para permitir a retomada.
+ */
 export function leaveRoom(socketId: string): LeaveOutcome | undefined {
   const room = getRoomOfSocket(socketId);
   if (!room) return undefined;
@@ -116,17 +169,13 @@ export function leaveRoom(socketId: string): LeaveOutcome | undefined {
   if (!participant) return undefined;
 
   room.participants.delete(socketId);
-  const roomClosed = room.hostId === socketId;
-
-  if (roomClosed) {
-    for (const id of room.participants.keys()) socketToRoom.delete(id);
-    room.participants.clear();
-    rooms.delete(room.id);
-  } else if (room.participants.size === 0) {
-    rooms.delete(room.id);
+  const wasHost = room.hostId === socketId;
+  if (wasHost) {
+    room.hostId = null;
+    room.sharing = false;
   }
 
-  return { room, participant, roomClosed };
+  return { room, participant, wasHost };
 }
 
 export function setSharing(socketId: string, sharing: boolean): Room | undefined {
@@ -155,9 +204,11 @@ export function newMessageId(): string {
 /** Remove salas criadas por engano (ou por bots) que nunca receberam ninguem. */
 export function sweepEmptyRooms(now = Date.now()): number {
   let removed = 0;
-  for (const [id, room] of rooms) {
+  for (const room of [...rooms.values()]) {
+    // Salas em carencia tem timer proprio e nao devem ser varridas aqui.
+    if (room.closeTimer) continue;
     if (room.participants.size === 0 && now - room.createdAt > EMPTY_ROOM_TTL_MS) {
-      rooms.delete(id);
+      destroyRoom(room);
       removed += 1;
     }
   }
