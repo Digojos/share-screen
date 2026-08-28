@@ -284,6 +284,17 @@ app detecta isso e desabilita o botao com o motivo, em vez de falhar no clique.
 Sem dominio proprio, `sslip.io` resolve: `203-0-113-10.sslip.io` ja aponta para
 203.0.113.10 sem cadastro, e o Let's Encrypt emite certificado para esse nome.
 
+**A ordem importa:** adicione o bloco em HTTP puro primeiro e recarregue; so
+entao rode `certbot --nginx`, que encontra o `server_name` e converte o bloco
+para HTTPS sozinho. Comecar com um bloco que ja aponta para o certificado trava
+os dois lados — o arquivo nao existe, `nginx -t` falha, e o certbot nao roda
+porque o nginx nao recarrega.
+
+Nao ha conflito com as outras aplicacoes desde que `nginx -t` passe — e se nao
+passar, nada e aplicado. Os pontos de atencao estao comentados no exemplo:
+`server_name` unico, nada de `default_server` duplicado, e `http2 on;` que so
+existe no nginx 1.25.1+.
+
 **A armadilha:** o Socket.IO precisa de upgrade para WebSocket. Sem isso a
 pagina carrega inteira e nada funciona — parece bug da aplicacao, nao do proxy.
 
