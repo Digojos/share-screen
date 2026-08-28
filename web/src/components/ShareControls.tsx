@@ -1,4 +1,4 @@
-import type { ScreenShareControls } from '../rtc/useScreenShare';
+import { capturaDisponivel, type ScreenShareControls } from '../rtc/useScreenShare';
 
 interface ShareControlsProps {
   share: ScreenShareControls;
@@ -25,6 +25,10 @@ function dicaDeAudio(surface: string | null): string {
 }
 
 export function ShareControls({ share, onStart, onStop }: ShareControlsProps) {
+  // Avisar ANTES do clique: descobrir que nao da para compartilhar so depois de
+  // tentar, num servidor de teste, custa muito mais tempo do que parece.
+  const bloqueadoPorHttp = !capturaDisponivel();
+
   return (
     <section className="controls">
       {share.sharing ? (
@@ -32,9 +36,16 @@ export function ShareControls({ share, onStart, onStop }: ShareControlsProps) {
           Parar compartilhamento
         </button>
       ) : (
-        <button type="button" className="primary" onClick={onStart}>
+        <button type="button" className="primary" onClick={onStart} disabled={bloqueadoPorHttp}>
           Compartilhar tela
         </button>
+      )}
+
+      {bloqueadoPorHttp && (
+        <span className="badge error">
+          Sem HTTPS o navegador bloqueia a captura de tela e o microfone. Use um dominio com
+          certificado, ou acesse por localhost.
+        </span>
       )}
 
       {share.sharing && (

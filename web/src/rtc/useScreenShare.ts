@@ -60,7 +60,19 @@ function buildVideoConstraints(
   return constraints;
 }
 
+/**
+ * Fora de um contexto seguro o Chrome nem define `navigator.mediaDevices`, e a
+ * chamada estoura um TypeError generico. E o erro mais provavel ao testar num
+ * servidor por `http://ip:porta`, entao vale dizer o nome dele.
+ */
+export function capturaDisponivel(): boolean {
+  return window.isSecureContext && navigator.mediaDevices !== undefined;
+}
+
 function describeError(error: unknown): string {
+  if (!capturaDisponivel()) {
+    return 'Compartilhar tela exige HTTPS. Em http://ip:porta o navegador bloqueia a captura — use um dominio com certificado, ou localhost.';
+  }
   if (!(error instanceof DOMException)) {
     return 'Nao foi possivel iniciar o compartilhamento.';
   }

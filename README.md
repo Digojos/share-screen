@@ -267,6 +267,26 @@ O `TURN_SECRET` do compose e o do `server/.env` precisam ser **o mesmo valor**.
 - **HTTPS obrigatorio em producao.** `getDisplayMedia` so funciona em contexto
   seguro; `localhost` e a unica excecao.
 
+## Servindo atras de nginx
+
+`deploy/nginx.example.conf` tem a configuracao pronta. Duas decisoes explicam
+o formato:
+
+**Mesma origem.** O nginx serve o front em `/` e repassa `/socket.io/` e
+`/api/` para o servidor. Assim nao ha origem cruzada, o CORS deixa de existir e
+basta um certificado.
+
+**HTTPS nao e opcional.** `getDisplayMedia` e o microfone exigem contexto
+seguro: em `http://ip:porta` o navegador nem expoe `navigator.mediaDevices`.
+Assistir e conversar por chat funcionam, mas ninguem consegue transmitir — o
+app detecta isso e desabilita o botao com o motivo, em vez de falhar no clique.
+
+Sem dominio proprio, `sslip.io` resolve: `203-0-113-10.sslip.io` ja aponta para
+203.0.113.10 sem cadastro, e o Let's Encrypt emite certificado para esse nome.
+
+**A armadilha:** o Socket.IO precisa de upgrade para WebSocket. Sem isso a
+pagina carrega inteira e nada funciona — parece bug da aplicacao, nao do proxy.
+
 ## Deploy
 
 1. `npm run build` gera `server/dist` e `web/dist`.
