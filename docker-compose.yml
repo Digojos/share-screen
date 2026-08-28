@@ -14,9 +14,11 @@ services:
       MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-6}
       HOST_GRACE_SECONDS: ${HOST_GRACE_SECONDS:-60}
     ports:
-      # A porta no host e configuravel para nao colidir com um `npm run dev`
-      # em andamento, e porque num servidor ela costuma ser outra.
-      - '${SERVER_PORT:-3001}:3001'
+      # Publicado so em 127.0.0.1: numa VPS, `0.0.0.0` exporia a sinalizacao na
+      # internet por HTTP puro, driblando o nginx e o TLS. O proxy alcanca por
+      # localhost. Use BIND_HOST=0.0.0.0 apenas para testar de outra maquina na
+      # rede local.
+      - '${BIND_HOST:-127.0.0.1}:${SERVER_PORT:-3001}:3001'
     depends_on:
       mysql:
         condition: service_healthy
@@ -29,7 +31,10 @@ services:
         # Embutida no bundle em tempo de build: trocar exige rebuild.
         VITE_SIGNALING_URL: ${VITE_SIGNALING_URL:-http://localhost:3001}
     ports:
-      - '${WEB_PORT:-8080}:80'
+      # Mesmo motivo: quem entrega o front para fora e o nginx, com certificado.
+      # Exposto direto, alguem acessaria por http://ip:8080 — onde compartilhar
+      # tela nao funciona, por falta de contexto seguro.
+      - '${BIND_HOST:-127.0.0.1}:${WEB_PORT:-8080}:80'
     depends_on:
       - server
 
@@ -62,8 +67,10 @@ services:
       MYSQL_USER: ${MYSQL_USER:-share}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-share}
     ports:
-      # Use MYSQL_PORT para nao colidir com um MySQL ja instalado na maquina.
-      - '${MYSQL_PORT:-3306}:3306'
+      # NUNCA em 0.0.0.0: seria um MySQL aberto na internet, com a senha do
+      # compose. O servidor fala com ele pela rede interna do Docker, entao esta
+      # publicacao existe apenas para ferramentas locais.
+      - '127.0.0.1:${MYSQL_PORT:-3306}:3306'
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
