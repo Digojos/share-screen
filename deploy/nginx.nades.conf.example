@@ -6,7 +6,12 @@
 # e um server HTTPS com o certificado.
 #
 # Troque `share.hubnades.com.br` pelo subdominio escolhido e aponte o DNS dele
-# para o IP do servidor antes de emitir o certificado.
+# para 177.153.38.61 antes de emitir o certificado.
+#
+# Siga a regra de ouro do SSL.md daquele projeto: adicione PRIMEIRO so o bloco
+# HTTP, recarregue, emita o certificado, e so entao acrescente o bloco HTTPS.
+# Com o bloco HTTPS apontando para um certificado inexistente, o `nades-client`
+# entra em restart loop — e leva os outros tres dominios junto.
 #
 # ---------------------------------------------------------------------------
 # POR QUE OS PROXY_PASS USAM NOMES, E NAO 127.0.0.1

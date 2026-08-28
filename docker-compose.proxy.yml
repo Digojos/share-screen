@@ -12,9 +12,14 @@
 #    servico chamado `server`, e sem alias os dois responderiam pelo mesmo nome
 #    na rede compartilhada — o proxy acertaria o alvo errado, de forma
 #    intermitente e dificil de diagnosticar.
+#
+# 3. Deixam de publicar portas no host. Alem de desnecessario (o proxy alcanca
+#    pela rede interna), evita colisao: o `nades` ja publica a 3001, que e a
+#    porta padrao da sinalizacao daqui.
 
 services:
   server:
+    ports: !reset []
     networks:
       default:
       proxy:
@@ -22,6 +27,7 @@ services:
           - share-screen-server
 
   web:
+    ports: !reset []
     networks:
       default:
       proxy:
@@ -31,6 +37,7 @@ services:
 networks:
   proxy:
     external: true
-    # Nome da rede criada pelo outro compose. Confirme com `docker network ls`;
-    # o padrao e <nome-da-pasta>_default.
-    name: ${PROXY_NETWORK:-nades_default}
+    # O nome vem da PASTA do outro projeto, nao do nome dele: no servidor o
+    # repositorio fica em /opt/nades/nadeshub, entao a rede e `nadeshub_default`.
+    # Confirme com `docker network ls | grep default`.
+    name: ${PROXY_NETWORK:-nadeshub_default}
