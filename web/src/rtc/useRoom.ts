@@ -10,7 +10,7 @@ import {
 } from './PeerManager';
 import { connectSignaling, fetchIceConfig, joinRoom, type SignalingSocket } from './signaling';
 import { loadSessionToken, saveSessionToken } from '../session';
-import type { VideoProfile } from './videoProfiles';
+import type { CodecOption, VideoProfile } from './videoProfiles';
 
 export type RoomStatus = 'connecting' | 'joined' | 'reconnecting' | 'error' | 'closed';
 
@@ -41,6 +41,7 @@ export interface RoomSession {
   sendChat: (text: string) => void;
   publishMedia: (media: LocalMedia) => void;
   setVideoProfile: (profile: VideoProfile) => void;
+  setCodec: (codec: CodecOption) => void;
 }
 
 /** Une historico e mensagens ja em tela, sem repetir nem perder nada. */
@@ -82,6 +83,8 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
   const pendingMediaRef = useRef<LocalMedia>(EMPTY_MEDIA);
   /** O perfil escolhido precisa sobreviver a troca de PeerManager na reconexao. */
   const profileRef = useRef<VideoProfile | null>(null);
+  /** Como o perfil, o codec precisa sobreviver a troca de PeerManager. */
+  const codecRef = useRef<CodecOption | null>(null);
   /** Distingue "nunca conectou" (erro) de "caiu e esta voltando" (reconexao). */
   const joinedOnceRef = useRef(false);
 
@@ -145,6 +148,7 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
       // nao recarregou, entao a captura de tela continua viva e a transmissao
       // volta sozinha, sem novo seletor.
       if (profileRef.current) manager.setVideoProfile(profileRef.current);
+      if (codecRef.current) manager.setCodec(codecRef.current);
       manager.setLocalMedia(pendingMediaRef.current);
       if (pendingMediaRef.current.video) {
         socket.emit('share:state', { sharing: true });
@@ -279,6 +283,11 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
     managerRef.current?.setVideoProfile(profile);
   }, []);
 
+  const setCodec = useCallback((codec: CodecOption) => {
+    codecRef.current = codec;
+    managerRef.current?.setCodec(codec);
+  }, []);
+
   /** Publica a midia local (tela e/ou microfone) para todos os peers. */
   const publishMedia = useCallback((media: LocalMedia) => {
     pendingMediaRef.current = media;
@@ -305,7 +314,8 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
       sendChat,
       publishMedia,
       setVideoProfile,
+      setCodec,
     }),
-    [status, error, role, selfId, peers, messages, remoteStream, voiceStreams, hostSharing, hostAwaySeconds, hasTurn, videoStats, outboundStats, sendChat, publishMedia, setVideoProfile],
+    [status, error, role, selfId, peers, messages, remoteStream, voiceStreams, hostSharing, hostAwaySeconds, hasTurn, videoStats, outboundStats, sendChat, publishMedia, setVideoProfile, setCodec],
   );
 }

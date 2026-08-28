@@ -1,5 +1,12 @@
 import type { IceCandidate, SessionDescription } from '@shared';
-import { VIDEO_PROFILES, DEFAULT_PROFILE, type VideoProfile } from './videoProfiles';
+import {
+  CODECS,
+  DEFAULT_CODEC,
+  DEFAULT_PROFILE,
+  VIDEO_PROFILES,
+  type CodecOption,
+  type VideoProfile,
+} from './videoProfiles';
 
 export type PeerConnectionState = RTCPeerConnectionState;
 
@@ -83,6 +90,8 @@ export class PeerManager {
 
   private videoProfile: VideoProfile = VIDEO_PROFILES[DEFAULT_PROFILE];
 
+  private codec: CodecOption = CODECS[DEFAULT_CODEC];
+
   constructor(
     private readonly selfId: string,
     private iceServers: RTCIceServer[],
@@ -113,6 +122,76 @@ export class PeerManager {
   setVideoProfile(profile: VideoProfile): void {
     this.videoProfile = profile;
     for (const entry of this.peers.values()) void this.applyVideoProfile(entry);
+  }
+
+  /**
+   * Troca o codec de video. Diferente do bitrate, isso muda o SDP: exige uma
+   * nova negociacao, entao cada conexao aberta refaz a oferta.
+   */
+  setCodec(codec: CodecOption): void {
+    this.codec = codec;
+    for (const entry of this.peers.values()) {
+      this.applyCodecPreference(entry);
+      void this.renegotiate(entry);
+    }
+  }
+
+  /**
+   * Reordena os codecs oferecidos no SDP. Sem isso o navegador escolhe pela
+   * ordem padrao, que comeca em VP8 — o mais antigo e o que pior comprime.
+   */
+  private applyCodecPreference(entry: PeerEntry): void {
+    if (!entry.videoSender) return;
+
+    // Preferir codec e um upgrade, nao um requisito: onde a API nao existe, o
+    // certo e cair no padrao do navegador em silencio, e nunca derrubar a
+    // publicacao de midia por causa disso.
+    if (typeof entry.pc.getTransceivers !== 'function') return;
+    const transceiver = entry.pc
+      .getTransceivers()
+      .find((t) => t.sender === entry.videoSender);
+    if (!transceiver || typeof transceiver.setCodecPreferences !== 'function') return;
+
+    // Lista vazia devolve a ordem padrao do navegador. Sem isto, escolher
+    // "Automatico" depois de outro codec nao desfazia nada: a preferencia
+    // anterior continuava valendo.
+    if (!this.codec.mime) {
+      transceiver.setCodecPreferences([]);
+      return;
+    }
+
+    if (typeof RTCRtpSender?.getCapabilities !== 'function') return;
+    const disponiveis = RTCRtpSender.getCapabilities('video')?.codecs ?? [];
+    const preferidos = disponiveis.filter((c) => c.mimeType === this.codec.mime);
+    if (preferidos.length === 0) return; // navegador nao oferece; mantem o padrao
+
+    // Os demais continuam na lista: se o outro lado nao suportar o preferido, a
+    // negociacao ainda encontra um denominador comum em vez de falhar.
+    const resto = disponiveis.filter((c) => c.mimeType !== this.codec.mime);
+    try {
+      transceiver.setCodecPreferences([...preferidos, ...resto]);
+    } catch (error) {
+      console.warn('[rtc] codec nao aceito, mantendo o padrao', error);
+    }
+  }
+
+  /** Dispara uma oferta nova pelo mesmo caminho do `negotiationneeded`. */
+  private async renegotiate(entry: PeerEntry): Promise<void> {
+    if (entry.makingOffer || entry.pc.signalingState !== 'stable') return;
+    try {
+      entry.makingOffer = true;
+      await entry.pc.setLocalDescription();
+      if (entry.pc.localDescription) {
+        const peerId = [...this.peers.entries()].find(([, e]) => e === entry)?.[0];
+        if (peerId) {
+          this.callbacks.onOffer(peerId, entry.pc.localDescription.toJSON() as SessionDescription);
+        }
+      }
+    } catch (error) {
+      console.error('[rtc] falha ao renegociar apos troca de codec', error);
+    } finally {
+      entry.makingOffer = false;
+    }
   }
 
   /** Cria a conexao com um peer. O host inicia a oferta; o espectador espera. */
@@ -305,7 +384,11 @@ export class PeerManager {
    * `replaceTrack(null)` o sender fica sem track e deixaria de ser encontrado.
    */
   private syncTracks(entry: PeerEntry, media: LocalMedia): void {
+    const tinhaVideo = entry.videoSender !== null;
     entry.videoSender = this.syncSender(entry.pc, entry.videoSender, media.video, media.stream);
+    // O transceiver so existe depois do addTrack; preferir o codec aqui pega a
+    // oferta que o `negotiationneeded` vai montar em seguida.
+    if (!tinhaVideo && entry.videoSender) this.applyCodecPreference(entry);
     entry.screenAudioSender = this.syncSender(
       entry.pc,
       entry.screenAudioSender,

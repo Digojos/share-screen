@@ -35,7 +35,25 @@ Tela de trabalho e jogo pedem coisas opostas, entao o host escolhe:
 | Perfil | contentHint | FPS | Teto por espectador | Sob pressao de banda |
 | --- | --- | --- | --- | --- |
 | Apresentacao | `text` | 30 | 2,5 Mbps | mantem resolucao |
-| Jogo | `motion` | 60 | 6 Mbps | mantem fluidez |
+| Jogo | `motion` | 60 | 12 Mbps | mantem fluidez |
+
+### Codec
+
+O navegador oferece VP8, H264, VP9, AV1 e H265, mas negocia **VP8** por padrao,
+por ser o primeiro da lista — e VP8 e o mais antigo e o que pior comprime.
+Trocar o codec e a maior melhoria de qualidade disponivel sem gastar mais banda,
+entao o app prefere **VP9** e deixa a escolha visivel:
+
+| Codec | Quando usar |
+| --- | --- |
+| VP9 (padrao) | melhor qualidade por bit; exige mais CPU |
+| AV1 | melhor compressao; so vale com encoder de hardware recente |
+| H264 | encoder de hardware quase sempre; sustenta 60fps com CPU baixa |
+| Automatico | ordem do navegador — costuma cair em VP8 |
+
+Nao ha vencedor universal, e o diagnostico do host diz qual escolher: `cpu`
+pede H264, `bandwidth` pede VP9 ou AV1. A troca renegocia a conexao, entao o
+video pode piscar por um instante.
 
 Separado disso ha um teto de **resolucao** (Nativa / Full HD / HD). E teto, nao
 alvo: compartilhar uma janela de 800x600 em Full HD nao inventa pixels. O limite
@@ -61,10 +79,9 @@ e sobe a qualidade ao longo dos primeiros segundos. E o perfil escolhido decide
 o que e sacrificado primeiro — Apresentacao derruba o framerate, Jogo derruba a
 resolucao.
 
-O teto e **por espectador**. Numa malha o host envia uma copia para cada um,
-entao 4 espectadores em modo Jogo podem custar ate 24 Mbps de upload. Sem teto,
-o WebRTC subiria ate saturar o link e a qualidade cairia para todos ao mesmo
-tempo.
+O teto e **por espectador**: numa malha o host envia uma copia para cada um.
+Ele nao forca o envio a subir — o controle de congestionamento continua
+mandando — mas um teto baixo impede uma conexao boa de usar a folga que tem.
 
 ## Voz
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMPTY_MEDIA, PeerManager, type LocalMedia } from './PeerManager';
 import { VIDEO_PROFILES } from './videoProfiles';
+import { CODECS } from './videoProfiles';
 import {
   fakeStream,
   fakeTrack,
@@ -242,5 +243,47 @@ describe('perfil de video', () => {
     expect((parametros.encodings as Array<{ maxBitrate: number }>)[0]?.maxBitrate).toBe(
       VIDEO_PROFILES.jogo.maxBitrate,
     );
+  });
+});
+
+describe('preferencia de codec', () => {
+  it('poe o codec escolhido na frente, sem descartar os demais', () => {
+    // O navegador negocia VP8 por padrao — o pior deles — so por ser o
+    // primeiro da lista. Reordenar e a maior melhoria de qualidade sem gastar
+    // banda; manter o resto da lista evita falhar com um par que nao suporte.
+    const { manager } = novoManager('aaa', midiaComVideo());
+    manager.addPeer('bbb');
+    const pc = FakeRTCPeerConnection.instances[0]!;
+
+    manager.setCodec(CODECS.vp9);
+
+    const ordem = (pc.codecPreferences as Array<{ mimeType: string }>).map((c) => c.mimeType);
+    expect(ordem[0]).toBe('video/VP9');
+    expect(ordem).toContain('video/VP8');
+    expect(ordem).toHaveLength(4);
+  });
+
+  it('nao mexe na ordem quando o codec e "automatico"', () => {
+    const { manager } = novoManager('aaa', midiaComVideo());
+    manager.addPeer('bbb');
+    const pc = FakeRTCPeerConnection.instances[0]!;
+
+    manager.setCodec(CODECS.auto);
+
+    expect(pc.codecPreferences).toHaveLength(0);
+  });
+
+  it('sobrevive a um navegador sem a API de codecs', () => {
+    // Preferir codec e upgrade, nao requisito: quebrar aqui derrubaria a
+    // publicacao de midia inteira em navegadores mais antigos.
+    const global = globalThis as Record<string, unknown>;
+    const anterior = global.RTCRtpSender;
+    global.RTCRtpSender = undefined;
+
+    const { manager } = novoManager('aaa', midiaComVideo());
+    expect(() => manager.addPeer('bbb')).not.toThrow();
+    expect(() => manager.setCodec(CODECS.vp9)).not.toThrow();
+
+    global.RTCRtpSender = anterior;
   });
 });

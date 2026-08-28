@@ -34,6 +34,8 @@ export class FakeRTCPeerConnection {
   localDescription: { toJSON: () => unknown } | null = null;
 
   closed = false;
+  /** Ultima ordem de codecs preferida, para os testes conferirem. */
+  codecPreferences: unknown[] = [];
   readonly senders: FakeSender[] = [];
   readonly addedTracks: Array<{ track: MediaStreamTrack; stream: MediaStream }> = [];
   readonly appliedCandidates: RTCIceCandidateInit[] = [];
@@ -65,6 +67,16 @@ export class FakeRTCPeerConnection {
 
   getSenders(): FakeSender[] {
     return this.senders;
+  }
+
+  /** Transceivers acompanham os senders; o PeerManager casa um pelo outro. */
+  getTransceivers(): Array<{ sender: FakeSender; setCodecPreferences: (c: unknown[]) => void }> {
+    return this.senders.map((sender) => ({
+      sender,
+      setCodecPreferences: (codecs: unknown[]) => {
+        this.codecPreferences = codecs;
+      },
+    }));
   }
 
   async setLocalDescription(): Promise<void> {
@@ -102,12 +114,29 @@ export function fakeStream(): MediaStream {
   return { id: 'stream' } as unknown as MediaStream;
 }
 
+/** Capacidades falsas, na mesma ordem que o Chrome real reporta. */
+export const CODECS_DISPONIVEIS = [
+  { mimeType: 'video/VP8', clockRate: 90000 },
+  { mimeType: 'video/H264', clockRate: 90000 },
+  { mimeType: 'video/AV1', clockRate: 90000 },
+  { mimeType: 'video/VP9', clockRate: 90000 },
+];
+
 /** Instala o dublê no escopo global e devolve a limpeza. */
 export function installFakeRtc(): () => void {
-  const anterior = (globalThis as Record<string, unknown>).RTCPeerConnection;
+  const global = globalThis as Record<string, unknown>;
+  const anteriorPc = global.RTCPeerConnection;
+  const anteriorSender = global.RTCRtpSender;
+
   FakeRTCPeerConnection.instances = [];
-  (globalThis as Record<string, unknown>).RTCPeerConnection = FakeRTCPeerConnection;
+  global.RTCPeerConnection = FakeRTCPeerConnection;
+  global.RTCRtpSender = {
+    getCapabilities: (kind: string) =>
+      kind === 'video' ? { codecs: CODECS_DISPONIVEIS } : { codecs: [] },
+  };
+
   return () => {
-    (globalThis as Record<string, unknown>).RTCPeerConnection = anterior;
+    global.RTCPeerConnection = anteriorPc;
+    global.RTCRtpSender = anteriorSender;
   };
 }

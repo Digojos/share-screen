@@ -9,10 +9,13 @@ import { useMicrophone } from '../rtc/useMicrophone';
 import { useRoom } from '../rtc/useRoom';
 import { useScreenShare } from '../rtc/useScreenShare';
 import {
+  CODECS,
+  DEFAULT_CODEC,
   DEFAULT_PROFILE,
   DEFAULT_RESOLUTION,
   RESOLUTIONS,
   VIDEO_PROFILES,
+  type CodecId,
   type ResolutionId,
   type VideoProfileId,
 } from '../rtc/videoProfiles';
@@ -77,6 +80,7 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   const [copied, setCopied] = useState(false);
   const [profileId, setProfileId] = useState<VideoProfileId>(DEFAULT_PROFILE);
   const [resolutionId, setResolutionId] = useState<ResolutionId>(DEFAULT_RESOLUTION);
+  const [codecId, setCodecId] = useState<CodecId>(DEFAULT_CODEC);
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [mutedPeers, setMutedPeers] = useState<ReadonlySet<string>>(new Set());
   const [peerVolumes, setPeerVolumes] = useState<ReadonlyMap<string, number>>(new Map());
@@ -87,7 +91,7 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   // Extraidas do objeto para que a dependencia do efeito seja a FUNCAO (estavel)
   // e nao o `room` inteiro, que muda a cada mensagem de chat — depender dele
   // republicaria a midia sem parar.
-  const { publishMedia, setVideoProfile } = room;
+  const { publishMedia, setVideoProfile, setCodec } = room;
   const share = useScreenShare(profile, resolution);
   const mic = useMicrophone();
   const isHost = room.role === 'host';
@@ -97,6 +101,11 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   useEffect(() => {
     setVideoProfile(profile);
   }, [profile, setVideoProfile]);
+
+  // Trocar de codec muda o SDP, entao renegocia — o video pode piscar.
+  useEffect(() => {
+    setCodec(CODECS[codecId]);
+  }, [codecId, setCodec]);
 
   function setPeerVolume(peerId: string, volume: number) {
     setPeerVolumes((prev) => new Map(prev).set(peerId, volume));
@@ -239,6 +248,21 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
                   </button>
                 ))}
                 <span className="badge">{profile.hint}</span>
+              </section>
+              <section className="controls">
+                <span className="muted">Codec:</span>
+                {Object.values(CODECS).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={option.id === codecId ? 'toggle on' : 'toggle off'}
+                    onClick={() => setCodecId(option.id)}
+                    title={option.hint}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <span className="badge">{CODECS[codecId].hint}</span>
               </section>
               <section className="controls">
                 <span className="muted">Resolucao:</span>
