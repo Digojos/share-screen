@@ -431,4 +431,24 @@ input {
   height: 100vh;
   border: none;
   border-radius: 0;
+  background: #000;
+}
+
+/* O botao some junto com o hover em tela cheia; mante-lo visivel ao focar e o
+   que garante saida sem depender do Esc. */
+.video-frame:fullscreen .video-fullscreen {
+  opacity: 0.85;
+}
+
+.video-aviso {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 0.8rem;
 }

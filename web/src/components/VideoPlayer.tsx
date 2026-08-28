@@ -9,11 +9,18 @@ interface VideoPlayerProps {
   placeholder: string;
 }
 
+/** Safari/iOS expoem a tela cheia so no proprio elemento de video, com prefixo. */
+interface VideoComTelaCheiaDaApple extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void;
+  webkitSupportsFullscreen?: boolean;
+}
+
 export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -42,13 +49,48 @@ export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerP
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
+  /**
+   * Tenta o quadro inteiro e, se for recusado, o proprio video.
+   *
+   * Sao caminhos com permissoes diferentes: dentro de um iframe sem
+   * `allow="fullscreen"` o container e barrado, enquanto o elemento de video
+   * costuma ter saida propria. E se os dois falharem, a pessoa precisa saber —
+   * um botao que nao faz nada e pior que um botao que explica.
+   */
   async function toggleFullscreen() {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await frameRef.current?.requestFullscreen();
-    } catch (error) {
-      console.warn('[video] tela cheia recusada', error);
+    setFullscreenError(null);
+
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch (error) {
+        console.warn('[video] falha ao sair da tela cheia', error);
+      }
+      return;
     }
+
+    const video = videoRef.current as VideoComTelaCheiaDaApple | null;
+
+    try {
+      await frameRef.current?.requestFullscreen();
+      return;
+    } catch (error) {
+      console.warn('[video] tela cheia no quadro recusada, tentando o video', error);
+    }
+
+    try {
+      await video?.requestFullscreen();
+      return;
+    } catch (error) {
+      console.warn('[video] tela cheia no video recusada', error);
+    }
+
+    if (typeof video?.webkitEnterFullscreen === 'function') {
+      video.webkitEnterFullscreen();
+      return;
+    }
+
+    setFullscreenError('O navegador recusou a tela cheia. Tente F11.');
   }
 
   async function handleManualPlay() {
@@ -82,6 +124,8 @@ export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerP
         </button>
       )}
 
+      {fullscreenError && <p className="video-aviso">{fullscreenError}</p>}
+
       {stream && autoplayBlocked && (
         <button type="button" className="video-overlay" onClick={handleManualPlay}>
           Clique para exibir o video
@@ -90,4 +134,3 @@ export function VideoPlayer({ stream, muted, volume, placeholder }: VideoPlayerP
     </div>
   );
 }
-
