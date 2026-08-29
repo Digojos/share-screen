@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Chat } from '../components/Chat';
 import { AudioControls } from '../components/AudioControls';
 import { PlayerSettings } from '../components/PlayerSettings';
+import { PreviewToggle } from '../components/PreviewToggle';
 import { RemoteVoices } from '../components/RemoteVoices';
 import { ShareControls } from '../components/ShareControls';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -88,6 +89,7 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
   const [codecId, setCodecId] = useState<CodecId>(DEFAULT_CODEC);
   const [frameRateId, setFrameRateId] = useState<FrameRateId>(DEFAULT_FRAME_RATE);
   const [speakerMuted, setSpeakerMuted] = useState(false);
+  const [previewVisivel, setPreviewVisivel] = useState(true);
   const [mutedPeers, setMutedPeers] = useState<ReadonlySet<string>>(new Set());
   const [peerVolumes, setPeerVolumes] = useState<ReadonlyMap<string, number>>(new Map());
 
@@ -232,7 +234,7 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
       <div className="room-body">
         <div className="room-stage">
           <VideoPlayer
-            stream={isHost ? share.stream : viewerStream}
+            stream={isHost ? (previewVisivel ? share.stream : null) : viewerStream}
             muted={videoMuted}
             volume={videoVolume}
             overlay={
@@ -243,6 +245,13 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
                   speakerMuted={speakerMuted}
                   onToggleSpeaker={() => setSpeakerMuted((value) => !value)}
                 />
+                {isHost && share.sharing && (
+                  <PreviewToggle
+                    visivel={previewVisivel}
+                    onToggle={() => setPreviewVisivel((v) => !v)}
+                    displaySurface={share.displaySurface}
+                  />
+                )}
                 {isHost && (
                   <PlayerSettings
                     profileId={profileId}
@@ -258,7 +267,13 @@ function RoomSession({ roomId, displayName }: { roomId: string; displayName: str
                 )}
               </>
             }
-            placeholder={isHost ? 'Sua tela aparece aqui depois de compartilhar.' : viewerPlaceholder}
+            placeholder={
+              isHost
+                ? share.sharing && !previewVisivel
+                  ? 'Preview oculto. Sua tela continua sendo transmitida normalmente.'
+                  : 'Sua tela aparece aqui depois de compartilhar.'
+                : viewerPlaceholder
+            }
           />
 
           {isHost && (

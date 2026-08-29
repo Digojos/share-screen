@@ -45,6 +45,19 @@ confunde com FPS, que e configuracao propria:
 | Nitidez | `text` | 30 | 2,5 Mbps | derruba quadros, mantem resolucao |
 | Fluidez | `motion` | 60 | 12 Mbps | derruba resolucao, mantem quadros |
 
+### Preview do host
+
+O host pode **ocultar o proprio video**. Nao e so economia de renderizacao:
+compartilhando a tela inteira com a janela do app visivel, o preview mostra a
+tela que contem o preview — o espelho infinito. O conteudo passa a mudar a cada
+quadro, e o codificador perde as regioes estaticas que normalmente pularia,
+gastando CPU e bitrate para transmitir o proprio reflexo.
+
+Ocultar **desanexa o stream** do elemento, em vez de escondê-lo por CSS: um
+elemento oculto pode continuar decodificando dependendo do navegador. A
+transmissao para os espectadores nao e afetada — ela vive nos senders da
+conexao, nao no preview.
+
 ### Quadros por segundo
 
 FPS e uma escolha propria (**Automatico / 15 / 30 / 60**), nao mais amarrada ao
