@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { PeerManager, EMPTY_MEDIA } from './PeerManager';
+import { PeerManager } from './PeerManager';
 import { FakeRTCPeerConnection, installFakeRtc, fakeStream, fakeTrack } from './testing/fakeRtc';
 
 let restaurar: () => void;
