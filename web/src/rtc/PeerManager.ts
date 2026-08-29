@@ -92,6 +92,9 @@ export class PeerManager {
 
   private codec: CodecOption = CODECS[DEFAULT_CODEC];
 
+  /** Rodizio da amostragem de estatisticas entre os peers. */
+  private indiceAmostragem = -1;
+
   constructor(
     private readonly selfId: string,
     private iceServers: RTCIceServer[],
@@ -323,12 +326,30 @@ export class PeerManager {
   }
 
   /**
+   * Um peer por amostragem, em rodizio.
+   *
+   * `getStats()` coleta o relatorio inteiro do motor WebRTC e roda na thread
+   * principal — a mesma do codificador. Percorrer todos os peers a cada ciclo
+   * multiplica esse custo pelo numero de espectadores, justamente quando o host
+   * ja esta mais carregado. Em rodizio a informacao continua chegando (so leva
+   * alguns ciclos para cobrir todos), a um N-esimo do custo.
+   */
+  private proximoPeerAmostrado(): PeerEntry[] {
+    const entries = [...this.peers.values()];
+    if (entries.length === 0) return [];
+    this.indiceAmostragem = (this.indiceAmostragem + 1) % entries.length;
+    const entry = entries[this.indiceAmostragem];
+    return entry ? [entry] : [];
+  }
+
+  /**
    * Estatisticas do video que esta CHEGANDO (lado do espectador). Uma tela
    * preta com `bytesReceived` zerado significa problema de transporte; com
    * bytes subindo e `framesDecoded` parado, o problema e de decodificacao.
    */
   async getInboundVideoStats(): Promise<InboundVideoStats | null> {
-    for (const entry of this.peers.values()) {
+    const alvo = this.proximoPeerAmostrado();
+    for (const entry of alvo) {
       const report = await entry.pc.getStats();
       const codecs = new Map<string, string>();
       let inbound: InboundVideoStats | null = null;
@@ -413,7 +434,7 @@ export class PeerManager {
   async getOutboundVideoStats(): Promise<OutboundVideoStats | null> {
     let worst: OutboundVideoStats | null = null;
 
-    for (const entry of this.peers.values()) {
+    for (const entry of this.proximoPeerAmostrado()) {
       const report = await entry.pc.getStats();
       report.forEach((stat) => {
         if (stat.type !== 'outbound-rtp') return;

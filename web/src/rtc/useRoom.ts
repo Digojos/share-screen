@@ -44,6 +44,21 @@ export interface RoomSession {
   setCodec: (codec: CodecOption) => void;
 }
 
+/**
+ * Teto de mensagens em memoria.
+ *
+ * A lista nao e virtualizada: cada mensagem nova re-renderiza todas. Numa
+ * sessao longa isso cresce sem limite e passa a competir com o codificador —
+ * que e o recurso escasso aqui. Duzentas cobrem qualquer conversa util na tela.
+ */
+const LIMITE_DE_MENSAGENS = 200;
+
+function limitarMensagens(mensagens: ChatMessage[]): ChatMessage[] {
+  return mensagens.length > LIMITE_DE_MENSAGENS
+    ? mensagens.slice(mensagens.length - LIMITE_DE_MENSAGENS)
+    : mensagens;
+}
+
 /** Une historico e mensagens ja em tela, sem repetir nem perder nada. */
 function mesclarMensagens(anteriores: ChatMessage[], historico: ChatMessage[]): ChatMessage[] {
   if (historico.length === 0) return anteriores;
@@ -140,7 +155,7 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
       // O historico e MESCLADO, nunca substituido: numa reconexao ele vem vazio
       // (sem banco) ou truncado no limite do servidor, e trocar a lista apagaria
       // a conversa que a pessoa esta lendo.
-      setMessages((anteriores) => mesclarMensagens(anteriores, joined.history));
+      setMessages((anteriores) => limitarMensagens(mesclarMensagens(anteriores, joined.history)));
       setError(null);
       setStatus('joined');
 
@@ -229,7 +244,9 @@ export function useRoom(roomId: string, displayName: string): RoomSession {
     socket.on('signal:ice', ({ from, candidate }) => {
       void managerRef.current?.handleIceCandidate(from, candidate);
     });
-    socket.on('chat:message', (message) => setMessages((prev) => [...prev, message]));
+    socket.on('chat:message', (message) =>
+      setMessages((prev) => limitarMensagens([...prev, message])),
+    );
 
     return () => {
       cancelled = true;
